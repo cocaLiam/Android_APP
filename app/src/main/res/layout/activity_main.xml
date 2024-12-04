@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- 상단에 공간을 차지할 TextView와 Button을 포함한 LinearLayout -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="16dp">
+
+        <!-- TextView -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="APP"
+            android:textSize="18sp"
+            android:gravity="center_vertical" />
+
+        <!-- Button -->
+        <Button
+            android:id="@+id/buttonSendData"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="SendData : APP to Web" />
+    </LinearLayout>
+
+    <!-- WebView의 높이를 조정하여 전체를 차지하지 않도록 설정 -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+</LinearLayout>

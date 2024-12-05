@@ -25,8 +25,8 @@ class MainActivity : ComponentActivity() {
 
         // WebView 초기화
         webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
-        buttonSendData = findViewById(R.id.buttonSendData)
         hybridAppBridge = HybridAppBridge(webView)
+        buttonSendData = findViewById(R.id.buttonSendData)
 
         // WebView 설정
         hybridAppBridge.initializeWebView(this)
@@ -41,7 +41,6 @@ class MainActivity : ComponentActivity() {
             sendDataToWebExample(
                 "key" to "value",
                 "key2" to "value2")
-            Log.i(MAIN_LOG_TAG, "Send Data")
         }
 
     }

@@ -30,13 +30,12 @@ class HybridAppBridge(private val webView: WebView) {
         webSettings.allowUniversalAccessFromFileURLs = true
         webSettings.javaScriptCanOpenWindowsAutomatically = true // JavaScript로 새 창 열기 허용
 
-        // WebView에 JavaScript 인터페이스 추가
-        webView.addJavascriptInterface(WebAppInterface(context), "AndroidInterface")
-
         // WebView 클라이언트 설정
         webView.webViewClient = CustomWebViewClient()
         webView.webChromeClient = WebChromeClient()
 
+        // WebView에 JavaScript 인터페이스 추가 [ 다른 webView 세팅이 끝나고 마지막에 해야함 ]
+        webView.addJavascriptInterface(WebAppInterface(context), "AndroidInterface")
     }
 
     /**
@@ -81,7 +80,7 @@ class HybridAppBridge(private val webView: WebView) {
     class WebAppInterface(private val context: Context) {
 
         @JavascriptInterface
-        fun showToast(message: String) {
+        fun andShowToast(message: String) {
             // Web에서 전달받은 메시지를 Toast로 표시
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }

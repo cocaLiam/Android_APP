@@ -2,6 +2,7 @@ package com.example.simplebleapp.bleModules
 
 import android.bluetooth.BluetoothDevice
 import android.content.Context
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -53,6 +54,11 @@ class ScanListAdapter() :
     /* 선택된 BLE 장치를 반환하는 메서드 */
     fun getSelectedDevice(): BluetoothDevice? {
         return if (selectedPosition != -1) devices[selectedPosition] else null// 선택된 장치가 없으면 반환
+    }
+
+    /* 장치 목록을 반환하는 메서드 추가 */
+    fun getDeviceList(): List<BluetoothDevice> {
+        return devices
     }
 
     /* RecyclerView의 각 항목을 관리하는 ViewHolder 클래스 */

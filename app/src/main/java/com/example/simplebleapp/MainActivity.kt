@@ -1,29 +1,33 @@
 package com.example.simplebleapp
 
 // Operator Pack
-import android.Manifest
+import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.app.ActivityCompat
 
 // UI Pack
+import androidx.recyclerview.widget.RecyclerView
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.RelativeLayout
 import android.widget.Toast
-import androidx.recyclerview.widget.RecyclerView
+import android.content.SharedPreferences
+import android.content.Intent
 
 // BLE Pack
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
-import android.content.Intent
+
+// dataType Pack
 
 // Util Pack
 import android.util.Log
 import android.widget.EditText
+import android.widget.ToggleButton
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -37,7 +41,7 @@ class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
     private val bleController = BleController(this) // MainActivity는 Context를 상속받음
-//    private val handler = Handler()
+    private val handler = Handler()
 
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
     private var isPopupVisible = false
@@ -46,6 +50,10 @@ class MainActivity : AppCompatActivity() {
 
     // View 변수 선언
     private lateinit var btnScanStart: Button
+    private lateinit var btnParingCheck: Button
+    private lateinit var btnDisconnect : Button
+    private lateinit var toggleBtnAutoConnect : ToggleButton
+    private lateinit var sharedPreferences: SharedPreferences
     private lateinit var btnConnect: Button
     private lateinit var btnClose: Button
     private lateinit var popupContainer: LinearLayout
@@ -78,52 +86,21 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        // 2_2. Launcher 객체 BleController 에 전달
+        // 2_2. BLE 권한 요청 런처 BleController 에 전달
         bleController.setBlePermissionLauncher(enableBluetoothLauncher)
 
-        // 3. BLE 기능 검사
+        // 3. BLE 지원 여부 확인
         bleController.checkBleOperator()
-
-        // 권한 요청 메서드 수정
-        fun permissionRequest(onPermissionGranted: () -> Unit) {
-            val permissionOk = bleController.requestBlePermission(this)
-            var allPermissionsGranted = true
-
-            for ((key, value) in permissionOk) {
-                if (!value) {
-                    Log.e(MAIN_LOG_TAG, "권한 없음 : $key")
-                    Toast.makeText(this, "${key}이 활성화되지 않았습니다.", Toast.LENGTH_SHORT).show()
-                    allPermissionsGranted = false
-                }
-            }
-
-            if (allPermissionsGranted) {
-                // 모든 권한이 허용된 경우 콜백 실행
-                onPermissionGranted()
-            } else {
-                Log.i(MAIN_LOG_TAG, "권한 요청 중... ${permissionOk}")
-            }
-        }
-
-
-//        fun permissionRequest(): Boolean {
-//            // 4. Bluetooth 가 비활성화 된 경우 활성화 요청
-//            val permissionOk = bleController.requestBlePermission(this)
-//            for ((key, value) in permissionOk) {
-//                if (!value){
-//                    Log.e(MAIN_LOG_TAG, "권한 없음 : ${key}")
-//                    Toast.makeText(this, "${key}이 활성화되지 않았습니다.", Toast.LENGTH_SHORT).show()
-//                    return false
-//                }
-//            }
-//            return true
-//        }
 
 // BLE 초기화 완료 -----------------------------------------------------------------------------------
 
 // UI 초기화 완료 ------------------------------------------------------------------------------------
         // activity_main.xml의 View 초기화
         btnScanStart = findViewById(R.id.btn_scan_start)
+        btnParingCheck = findViewById(R.id.btn_paring_check)
+        btnDisconnect  = findViewById(R.id.btn_disconnect)
+        toggleBtnAutoConnect = findViewById(R.id.toggle_auto_connect)
+        sharedPreferences = getSharedPreferences("ToggleStatusStorage", MODE_PRIVATE)
 
         // activity_main.xml의 루트 레이아웃 가져오기
         val rootLayout =
@@ -155,11 +132,50 @@ class MainActivity : AppCompatActivity() {
         // 팝업을 루트 레이아웃에 추가
         rootLayout.addView(popupView)
 
+        bleController.requestBlePermission(this)
         // Scan Start 버튼 클릭 리스너
         btnScanStart.setOnClickListener {
-            permissionRequest {
+            if(bleController.requestBlePermission(this)){
                 // 권한이 허용된 경우에만 BLE 스캔 시작
                 startBleScan()
+            }
+        }
+
+        // Paring check 버튼 클릭 리스너
+        btnParingCheck.setOnClickListener {
+            val bondedDevices: Set<BluetoothDevice>? = bleController.getBondedDevices()
+            Log.i(MAIN_LOG_TAG, "bondedDevices : $bondedDevices")
+            Log.i(MAIN_LOG_TAG, "getConnectedDevices : ${bleController.getConnectedDevices()}")
+            if (bondedDevices == null){
+                bleController.updateReadData("")
+            }else{
+                bleController.updateReadData("페어링된 기기 리스트 : ${bondedDevices} \n" +
+                        "현재 연결된 기기 리스트 : ${bleController.getConnectedDevices()}")
+            }
+        }
+
+        // Disconnect 버튼 클릭 리스너
+        btnDisconnect.setOnClickListener{
+            bleController.disconnectAllDevices()
+        }
+
+        // 저장된 상태 불러오기
+        val toggleState = sharedPreferences.getBoolean("toggleAccessKey", false)
+        toggleBtnAutoConnect.isChecked = toggleState
+        // ToggleButton의 상태 변경 리스너 설정
+        toggleBtnAutoConnect.setOnCheckedChangeListener { _, isChecked ->
+            // 상태 저장
+            with(sharedPreferences.edit()) {
+                putBoolean("toggleAccessKey", isChecked)
+                apply()
+            }
+
+            if (isChecked) {
+                // ToggleButton이 ON 상태일 때 실행할 코드
+                Toast.makeText(this, "자동 연결 모드 ON", Toast.LENGTH_SHORT).show()
+            } else {
+                // ToggleButton이 OFF 상태일 때 실행할 코드
+                Toast.makeText(this, "자동 연결 모드 OFF", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -168,8 +184,7 @@ class MainActivity : AppCompatActivity() {
             val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
             if (inputData.isNotEmpty()) {
                 val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
-//                val hexString = dataToSend.joinToString(" ") { "%02x".format(it) }
-                bleController.writeData(dataToSend) // BLE로 데이터 전송
+                bleController.writeData(dataToSend, (bleController.getConnectedDevices())[0]) // BLE로 데이터 전송
                 Toast.makeText(this, "Data Sent: $inputData", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Please enter data to send", Toast.LENGTH_SHORT).show()
@@ -179,14 +194,17 @@ class MainActivity : AppCompatActivity() {
         // ( 트리거 : APP )
         // 기기에 Info Request 를 해서 받는 Read Data
         btnRequestReadData.setOnClickListener {
-            bleController.requestReadData()
-//            etOutputData.setText(bleController.getReadData())
+            bleController.requestReadData((bleController.getConnectedDevices())[0])
         }
 
         // LiveData 관찰 설정
         bleController.readData.observe(this, Observer { newData ->
             // 데이터가 변경되면 UI 업데이트
-            etOutputData.setText(newData)
+            if ( newData is String){
+                etOutputData.setText(newData)
+            }else{
+                etOutputData.setText(newData.toString())
+            }
         })
 
         // Close 버튼 클릭 리스너
@@ -199,37 +217,29 @@ class MainActivity : AppCompatActivity() {
             val selectedDevice = scanListAdapter.getSelectedDevice()
             if (selectedDevice != null) {  // unknown Device 의 경우
                 Toast.makeText(this, "Selected: ${selectedDevice.name}", Toast.LENGTH_SHORT).show()
-                // 권한이 허용된 경우 BLE 장치 연결
-                if (ActivityCompat.checkSelfPermission(  // 블루투스 커넥트 권한 검사
-                        this,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {  // 블루투스 권한이 이미 있는 경우
-                    bleController.connectToDevice(selectedDevice, { isConnected ->
-                        if (isConnected) {
-                            Log.i(MAIN_LOG_TAG, "BLE 장치에 성공적으로 연결되었습니다.")
-                        } else {
-                            Log.i(MAIN_LOG_TAG, "BLE 장치 연결이 해제되었습니다.")
-                        }
-                    })
-                } else {  // 블루투스 권한이 없는 경우 권한 요청 후 다시 Connect
-                    permissionRequest {
-                        bleController.connectToDevice(selectedDevice, { isConnected ->
-                            if (isConnected) {
-                                Log.i(MAIN_LOG_TAG, "BLE 장치에 성공적으로 연결되었습니다.")
-                            } else {
-                                Log.i(MAIN_LOG_TAG, "BLE 장치 연결이 해제되었습니다.")
-                            }
-                        })
-                    }
-                }
+                connectToDeviceWithPermissionCheck(selectedDevice)
                 // Connect 후 팝업창 종료 + Scan 종료
                 stopBleScanAndClearScanList()
             } else {
                 Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show()
             }
         }
+
 // UI 초기화 완료 ------------------------------------------------------------------------------------
+    }
+
+    // BLE Connect 권한 검사 메서드
+    private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
+        if(bleController.requestBlePermission(this)){
+            // 블루투스 권한이 이미 있는 경우
+            bleController.connectToDevice(selectedDevice, { isConnected ->
+                if (isConnected) {
+                    Log.i(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 성공")
+                } else {
+                    Log.w(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 실패")
+                }
+            })
+        }
     }
 
     override fun onRequestPermissionsResult(
@@ -243,12 +253,15 @@ class MainActivity : AppCompatActivity() {
             when (requestCode) {
                 101 -> { // BLE 스캔 권한 요청 결과
                     Log.i(MAIN_LOG_TAG, "블루투스 스캔 권한이 허용되었습니다.")
+                    bleController.permissionStatus.bluetoothScanPermission = true
                 }
                 102 -> { // 위치 권한 요청 결과
                     Log.i(MAIN_LOG_TAG, "위치 권한이 허용되었습니다.")
+                    bleController.permissionStatus.locationPermission = true
                 }
                 103 -> { // BLE 연결 권한 요청 결과
                     Log.i(MAIN_LOG_TAG, "블루투스 연결 권한이 허용되었습니다.")
+                    bleController.permissionStatus.bluetoothConnectPermission = true
                 }
             }
         } else {
@@ -256,14 +269,17 @@ class MainActivity : AppCompatActivity() {
             when (requestCode) {
                 101 -> {
                     Log.e(MAIN_LOG_TAG, "블루투스 스캔 권한이 거부되었습니다.")
+                    bleController.permissionStatus.bluetoothScanPermission = false
                     Toast.makeText(this, "블루투스 스캔 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
                 }
                 102 -> {
                     Log.e(MAIN_LOG_TAG, "위치 권한이 거부되었습니다.")
+                    bleController.permissionStatus.locationPermission = false
                     Toast.makeText(this, "위치 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
                 }
                 103 -> {
                     Log.e(MAIN_LOG_TAG, "블루투스 연결 권한이 거부되었습니다.")
+                    bleController.permissionStatus.bluetoothConnectPermission = false
                     Toast.makeText(this, "블루투스 연결 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -273,8 +289,9 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.i(MAIN_LOG_TAG, "onDestroy")
-        bleController.disconnect()
         Toast.makeText(this, "onDestroy", Toast.LENGTH_SHORT).show()
+        bleController.disconnectAllDevices()
+        scanListAdapter.clearDevices()
         stopBleScanAndClearScanList()
         isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
     }
@@ -290,20 +307,29 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
         super.onResume()
         Log.i(MAIN_LOG_TAG, "onResume")
-//        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
-//        if (isPopupVisible) { // 팝업 상태 복구
-//            popupView.visibility = View.VISIBLE
-//            popupContainer.visibility = View.VISIBLE
-//            btnScanStart.visibility = View.GONE
-//        } else if (scanResults.isEmpty()) { // 스캔 결과가 없으면 스캔 재개
-//            startBleScan()
-//        }
+        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+
+        if (toggleBtnAutoConnect.isChecked) {
+            bleController.startBleScan(scanCallback)
+            val pairedDevices = bleController.getBondedDevices() ?: return
+
+            handler.postDelayed({
+                val scannedDevices = scanListAdapter.getDeviceList()
+                Log.i(MAIN_LOG_TAG, "pairedDevices  : ${pairedDevices}")
+                Log.i(MAIN_LOG_TAG, "scannedDevices : ${scannedDevices}")
+                for (pairedDevice in pairedDevices) {
+                    connectToDeviceWithPermissionCheck(pairedDevice)
+                }
+            }, 3000) // 5000 밀리초 = 5초
+        }
     }
 
     private fun startBleScan() {
         try {
-            bleController.startBleScan(scanCallback, popupContainer)
+            bleController.bleScanPopup(scanCallback, popupContainer)
             btnScanStart.visibility = View.GONE
+            btnParingCheck.visibility = View.GONE
+            toggleBtnAutoConnect.visibility = View.GONE
             popupView.visibility = View.VISIBLE
             popupContainer.visibility = View.VISIBLE
         } catch (e: Exception) {
@@ -316,6 +342,8 @@ class MainActivity : AppCompatActivity() {
             bleController.stopBleScan(scanCallback)
             Log.i(MAIN_LOG_TAG, "블루투스 스캔 정지 ")
             btnScanStart.visibility = View.VISIBLE // Scan Start 버튼 활성화
+            btnParingCheck.visibility = View.VISIBLE
+            toggleBtnAutoConnect.visibility = View.VISIBLE
             popupView.visibility = View.GONE // 팝업 숨김
             popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
             scanListAdapter.clearDevices()

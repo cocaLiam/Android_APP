@@ -1,6 +1,6 @@
-// Operator Pack
 package com.example.simplebleapp.bleModules
 
+// Operator Pack
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.util.Log
@@ -29,58 +29,71 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
-import androidx.annotation.RequiresPermission
 import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 
+// dataType Pack
+import androidx.lifecycle.MutableLiveData
+import java.lang.reflect.Method
 
 // Util Pack
 import java.util.UUID
 
 // Custom Package
 
+data class PermissionStatus(
+    var bluetoothEnabled: Boolean = false,
+    var locationPermission: Boolean = false,
+    var bluetoothScanPermission: Boolean = false,
+    var bluetoothConnectPermission: Boolean = false
+)
+
+data class BleDeviceInfo(
+//    var device: BluetoothDevice? = null,
+    var gatt: BluetoothGatt? = null,
+    var writeCharacteristic: BluetoothGattCharacteristic? = null,
+    var readCharacteristic: BluetoothGattCharacteristic? = null
+)
 
 class BleController(private val applicationContext: Context) {
     // BLE 관련 멤버 변수
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private lateinit var bluetoothLeScanner: BluetoothLeScanner
-    private var bluetoothGatt: BluetoothGatt? = null
-
-    // GATT 특성
-    private var writeCharacteristic: BluetoothGattCharacteristic? = null
-    private var readCharacteristic: BluetoothGattCharacteristic? = null
-    private var receivedString: String = ""
 
     // 수신 데이터를 LiveData로 관리
-    private val _readData = MutableLiveData<String>() // 내부에서만 수정 가능
-    val readData: LiveData<String> get() = _readData // 외부에서는 읽기만 가능
+    private var _readData = MutableLiveData<Any>() // 내부에서만 수정 가능
+    val readData: LiveData<Any> get() = _readData // 외부에서는 읽기만 가능
 
-    /*
-    * 49535343-FE7D-4AE5-8FA9-9FAFD205E455 - Svc
-    * 49535343-1E4D-4BD9-BA61-23C647249616 - Write
-    * 49535343-8841-43F4-A8D4-ECBE34729BB3 - Read ( Notify )
-    * 49535343-4C8A-39B3-2F49-511CFF073B7E - CP UUID
-    * */
+//    // UUID는 GATT 서비스와 특성을 식별하는 데 사용됩니다.
+//    private val SERVICE_UUID = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455") //
+//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("49535343-8841-43f4-a8d4-ecbe34729bb3") //
+//    private val READ_CHARACTERISTIC_UUID = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616") //
+
+//    // Microchip Keyboard
+//    private val SERVICE_UUID = UUID.fromString("00001812-0000-1000-8000-00805f9b34fb") //
+//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("00002a4e-0000-1000-8000-00805f9b34fb") //
+//    private val READ_CHARACTERISTIC_UUID = UUID.fromString("00002a4d-0000-1000-8000-00805f9b34fb") //
+
+//    // pic32cx-bz 읽기 특성
+//    private val SERVICE_UUID =              UUID.fromString("4d434850-5255-42d0-aef8-881facf4ceea")
+//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("4d434850-5255-42d0-aef8-881fccf4ceea")
+//    private val READ_CHARACTERISTIC_UUID =  UUID.fromString("4d434850-5255-42d0-aef8-881fbcf4ceea")
+
     // TRS Service ( peri_uart )
-    private val SERVICE_UUID                = UUID.fromString("49535343-FE7D-4AE5-8FA9-9FAFD205E455")
-    private val WRITE_CHARACTERISTIC_UUID   = UUID.fromString("49535343-1E4D-4BD9-BA61-23C647249616")
-    private val READ_CHARACTERISTIC_UUID    = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
+    private val serviceUuid = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
+    private val writeCharacteristicUuid = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
+    private val readCharacteristicUuid = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
 
     // ActivityResultLauncher를 클래스의 멤버 변수로 선언
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
 
     // 스캔 제한 시간
-    private val SCAN_PERIOD: Long = 10000
-    private val BLECONT_LOG_TAG = " - BleController"
+    private val scanPeriod: Long = 10000
+    private val logTagBleController = " - BleController"
 
     // 권한 상태를 저장하는 Map
-    private val permissionStatus = mutableMapOf(
-        "블루투스 활성화" to false,
-        "블루투스 스캔 권한" to false,
-        "위치 권한" to false,
-        "블루투스 연결 권한" to false
-    )
+    val permissionStatus = PermissionStatus()
+    private var bluetoothGattMap: MutableMap<BluetoothDevice, BleDeviceInfo> = mutableMapOf()
 
     /**
      * BLE 모듈 초기화
@@ -95,7 +108,7 @@ class BleController(private val applicationContext: Context) {
     }
 
     /**
-     * BLE 권한 요청 런처 설정
+     * BLE 권한 요청 런처 등록
      */
     fun setBlePermissionLauncher(launcher: ActivityResultLauncher<Intent>) {
         enableBluetoothLauncher = launcher
@@ -108,134 +121,131 @@ class BleController(private val applicationContext: Context) {
         val bluetoothLEAvailable =
             applicationContext.packageManager.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
         if (!bluetoothLEAvailable) {
-            Log.e(BLECONT_LOG_TAG, "기기의 BLE 지원 여부 확인 : $bluetoothLEAvailable")
-            // TODO: BLE 미지원 기기에 대한 에러 처리 필요
+            useToastOnSubThread("BLUETOOTH_LE 기능을 지원 안함")
         }
-
-//        if (bluetoothAdapter == null) {
-//            Log.e(BLECONT_LOG_TAG, "기기의 BLE 및 Bluetooth Classic 기능 지원 여부 확인 : $bluetoothAdapter")
-//            // TODO: Bluetooth 미지원 기기에 대한 에러 처리 필요
-//        }
     }
 
     /**
      * BLE 권한 요청
      */
-    fun requestBlePermission(activity: Activity): MutableMap<String, Boolean> {
+    fun requestBlePermission(activity: Activity): Boolean {
         //        val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
 
         // 1. 블루투스 활성화 요청 <System Setting>
-        if (!bluetoothAdapter.isEnabled) {
+        if (hasBluetoothConnectPermission()) {
+            permissionStatus.bluetoothEnabled = true
+        } else {
+            // BLE 권한 요청 런처 실행
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent) // registerForActivityResult로 처리
-            permissionStatus["블루투스 활성화"] = false // 활성화 여부는 런처 결과에서 처리
-        } else {
-            permissionStatus["블루투스 활성화"] = true
+            permissionStatus.bluetoothEnabled = false // 활성화 여부는 런처 결과에서 처리
         }
 
         // 2. Android 12(API 31) 이상에서 BLE 스캔 권한 요청 <Permission Request>
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(
-                    activity,
-                    Manifest.permission.BLUETOOTH_SCAN
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    activity,
-                    arrayOf(Manifest.permission.BLUETOOTH_SCAN),
-                    101 // 요청 코드
-                )
-                permissionStatus["블루투스 스캔 권한"] = false
-            } else permissionStatus["블루투스 스캔 권한"] = true
-        } else permissionStatus["블루투스 스캔 권한"] = true
+        if (hasBluetoothConnectPermission()) {
+            permissionStatus.bluetoothScanPermission = true
+        } else {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.BLUETOOTH_SCAN),
+                101 // 요청 코드
+            )
+            permissionStatus.bluetoothScanPermission = false
+        }
 
         // 3. 위치 정보 권한 요청 <Permission Request>
-        if (ContextCompat.checkSelfPermission(
-                activity,
-                Manifest.permission.ACCESS_FINE_LOCATION
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (hasBluetoothConnectPermission()) {
+            permissionStatus.locationPermission = true
+        } else {
             ActivityCompat.requestPermissions(
                 activity,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
                 102 // 요청 코드
             )
-            permissionStatus["위치 권한"] = false
-        } else {
-            permissionStatus["위치 권한"] = true
+            permissionStatus.locationPermission = false
         }
 
         // 4. 블루투스 연결 권한 요청 <Permission Request>
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            if (ContextCompat.checkSelfPermission(
-                    activity,
-                    Manifest.permission.BLUETOOTH_CONNECT
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
-                ActivityCompat.requestPermissions(
-                    activity,
-                    arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
-                    103 // 요청 코드
-                )
-                permissionStatus["블루투스 연결 권한"] = false
-            } else permissionStatus["블루투스 연결 권한"] = true
-        } else permissionStatus["블루투스 연결 권한"] = true
+        if (hasBluetoothConnectPermission()) {
+            permissionStatus.bluetoothConnectPermission = true
+        } else {
+            ActivityCompat.requestPermissions(
+                activity,
+                arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
+                103 // 요청 코드
+            )
+            permissionStatus.bluetoothConnectPermission = false
+        }
 
-        return permissionStatus
+        return hasBluetoothConnectPermission()
+    }
+
+    /**
+     * BLE Scan 창 팝업
+     */
+    fun <T> bleScanPopup(scanCallback: ScanCallback, popupContainer: T) {
+        startBleScan(scanCallback)
+
+        // 10초 후 스캔 중지
+        Log.i(logTagBleController, "스캔 타임아웃 제한시간 : ${scanPeriod / 1000}초 ")
+        when (popupContainer) {
+            is LinearLayout -> {  // 특정 팝업창에 Text로 UI 표현하는 경우
+                popupContainer.postDelayed({
+                    stopBleScan(scanCallback)
+                }, scanPeriod)
+            }
+
+            is Handler -> {  // 일반 화면에 Text로 UI 표현하는 경우
+                popupContainer.postDelayed({ // SCAN_PERIOD 시간후에 발동되는 지연 함수
+                    Log.w(logTagBleController, "--스캔 타임아웃-- ")
+                    stopBleScan(scanCallback)
+                }, scanPeriod)
+            }
+        }
     }
 
     /**
      * BLE 스캔 시작
      */
-    fun <T> startBleScan(scanCallback: ScanCallback, popupContainer: T) {
-        bluetoothLeScanner.startScan(scanCallback)
-
-        // 10초 후 스캔 중지
-        Log.i(BLECONT_LOG_TAG, "스캔 타임아웃 제한시간 : ${SCAN_PERIOD / 1000}초 ")
-        when (popupContainer) {
-            is LinearLayout -> {  // 특정 팝업창에 Text로 UI 표현하는 경우
-                popupContainer.postDelayed({
-                    stopBleScan(scanCallback)
-                }, SCAN_PERIOD)
+    fun startBleScan(scanCallback: ScanCallback) {
+        try {
+            if (hasBluetoothConnectPermission()) {
+                bluetoothLeScanner.startScan(scanCallback)
             }
-
-            is Handler -> {  // 일반 화면에 Text로 UI 표현하는 경우
-                popupContainer.postDelayed({ // SCAN_PERIOD 시간후에 발동되는 지연 함수
-                    Log.w(BLECONT_LOG_TAG, "--스캔 타임아웃-- ")
-                    bluetoothLeScanner.stopScan(scanCallback)
-                }, SCAN_PERIOD)
-            }
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "startBleScan Failed: ${e.message}")
+            // 권한이 없을 때의 처리 로직 추가
         }
     }
-
 
     /**
      * BLE 스캔 중지
      */
     fun stopBleScan(scanCallback: ScanCallback) {
         try {
-            bluetoothLeScanner.stopScan(scanCallback)
-            Log.e(BLECONT_LOG_TAG, "블루투스 스캔 정지")
-        } catch (e: Exception) {
-            Log.e(BLECONT_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
+            if (hasBluetoothConnectPermission()) {
+                bluetoothLeScanner.stopScan(scanCallback)
+            }
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "stopBleScan Failed: ${e.message}")
+            // 권한이 없을 때의 처리 로직 추가
         }
     }
 
     /**
      * BLE 장치 연결
      */
-    @RequiresPermission(value = Manifest.permission.BLUETOOTH_CONNECT)
     fun connectToDevice(device: BluetoothDevice, onConnectionStateChange: (Boolean) -> Unit) {
-        // 장치의 본딩 상태 확인 (본딩: BLE 장치와의 신뢰 관계를 설정하는 과정)
-        when (device.bondState) {
-            BluetoothDevice.BOND_BONDED -> Log.i(BLECONT_LOG_TAG, "해당 장치가 본딩되어 있습니다.")
-            BluetoothDevice.BOND_BONDING -> Log.i(BLECONT_LOG_TAG, "해당 장치가 본딩 중입니다.")
-            BluetoothDevice.BOND_NONE -> Log.i(BLECONT_LOG_TAG, "해당 장치가 본딩되지 않았습니다.")
+        // 블루투스 연결 권한 확인
+        if (!hasBluetoothConnectPermission()) {
+            return
         }
-        // GATT 서버에 연결 시도
-        bluetoothGatt =
+        try {
+            if (device.bondState == BluetoothDevice.BOND_NONE) {
+                device.createBond() // 페어링 시도
+            }
+            // GATT 서버에 연결 시도
             device.connectGatt(applicationContext, false, object : BluetoothGattCallback() {
-
                 // GATT 연결 상태가 변경되었을 때 호출되는 콜백
                 override fun onConnectionStateChange(
                     gatt: BluetoothGatt,
@@ -245,142 +255,79 @@ class BleController(private val applicationContext: Context) {
                     super.onConnectionStateChange(gatt, status, newState)
                     if (newState == BluetoothProfile.STATE_CONNECTED) {
                         // GATT 서버에 연결 성공
-                        Log.d(BLECONT_LOG_TAG, "GATT 서버에 연결되었습니다.")
+                        Log.d(logTagBleController, "GATT 서버에 연결되었습니다.")
+
+                        val bleDeviceInfo = BleDeviceInfo()
+                        bleDeviceInfo.gatt = gatt
+                        bluetoothGattMap[device] = bleDeviceInfo
                         onConnectionStateChange(true)
 
-                        // GATT 서비스 검색 (권한 확인 후 실행)
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            if (ContextCompat.checkSelfPermission(
-                                    applicationContext,
-                                    Manifest.permission.BLUETOOTH_CONNECT
-                                ) == PackageManager.PERMISSION_GRANTED
-                            ) {
-                                try {
-                                    gatt.discoverServices() // GATT 서비스 검색
-                                } catch (e: SecurityException) {
-                                    Log.e(
-                                        BLECONT_LOG_TAG,
-                                        "BLUETOOTH_CONNECT 권한이 없어 discoverServices()를 호출할 수 없습니다."
-                                    )
-                                }
-                            } else {
-                                Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없습니다.")
-                            }
-                        } else {
-                            try {
-                                gatt.discoverServices() // GATT 서비스 검색
-                            } catch (e: SecurityException) {
-                                Log.e(
-                                    BLECONT_LOG_TAG,
-                                    "BLUETOOTH_CONNECT 권한이 없어 discoverServices()를 호출할 수 없습니다."
-                                )
-                            }
+                        if (hasBluetoothConnectPermission()) {
+                            gatt.discoverServices() // GATT 서비스 검색
                         }
                     } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
                         // GATT 서버 연결 해제
-                        Log.d(BLECONT_LOG_TAG, "GATT 서버 연결이 해제되었습니다.")
+                        Log.d(logTagBleController, "GATT 서버 연결이 해제되었습니다.")
+                        bluetoothGattMap.remove(device)
                         onConnectionStateChange(false)
                     }
                 }
 
                 override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
                     super.onServicesDiscovered(gatt, status)
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        // GATT 서비스 검색 성공
-                        Log.d(BLECONT_LOG_TAG, "GATT 서비스 검색 성공")
 
-                        // 검색된 모든 서비스와 특성을 로그로 출력
-                        for (service in gatt.services) {
-                            Log.d(BLECONT_LOG_TAG, "서비스 UUID: ${service.uuid}")
-                            for (characteristic in service.characteristics) {
-                                Log.d(BLECONT_LOG_TAG, "  특성 UUID: ${characteristic.uuid}")
-                            }
-                        }
-
-                        // 특정 서비스와 특성 찾기
-                        val service = gatt.getService(SERVICE_UUID)
-                        if (service != null) {
-                            Log.d(BLECONT_LOG_TAG, "특정 서비스 발견: $SERVICE_UUID")
-
-                            // 쓰기 특성 초기화
-                            writeCharacteristic =
-                                service.getCharacteristic(WRITE_CHARACTERISTIC_UUID)
-                            if (writeCharacteristic != null) {
-                                Log.d(BLECONT_LOG_TAG, "쓰기 특성 발견: $WRITE_CHARACTERISTIC_UUID")
-                            } else {
-                                Log.e(BLECONT_LOG_TAG, "쓰기 특성을 찾을 수 없습니다.")
-                                useToastOnSubThread("쓰기 특성을 찾을 수 없습니다.")
-                            }
-
-                            // 읽기 특성 초기화
-                            readCharacteristic = service.getCharacteristic(READ_CHARACTERISTIC_UUID)
-                            if (readCharacteristic != null) {
-                                Log.d(BLECONT_LOG_TAG, "읽기 특성 발견: $READ_CHARACTERISTIC_UUID")
-
-                                // 읽기 특성에 대해 알림(Notification) 활성화
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                                    if (ContextCompat.checkSelfPermission(
-                                            applicationContext,
-                                            Manifest.permission.BLUETOOTH_CONNECT
-                                        ) == PackageManager.PERMISSION_GRANTED
-                                    ) {
-                                        try {
-                                            gatt.setCharacteristicNotification(
-                                                readCharacteristic,
-                                                true
-                                            )
-
-                                            // CCCD 설정 // Subscribe 요청 --> IoT
-                                            val descriptor =
-                                                readCharacteristic!!.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
-                                            descriptor.value =
-                                                BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                            gatt.writeDescriptor(descriptor)
-                                            Log.d(BLECONT_LOG_TAG, "읽기 특성에 대한 Notification 활성화 완료")
-
-                                        } catch (e: SecurityException) {
-                                            Log.e(
-                                                BLECONT_LOG_TAG,
-                                                "BLUETOOTH_CONNECT 권한이 없어 알림을 활성화할 수 없습니다."
-                                            )
-                                            useToastOnSubThread("BLUETOOTH_CONNECT 권한이 없어 알림을 활성화할 수 없습니다.")
-                                        }
-                                    } else {
-                                        Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없습니다.")
-                                        useToastOnSubThread("BLUETOOTH_CONNECT 권한이 없습니다.")
-                                    }
-                                } else {
-                                    try {
-                                        gatt.setCharacteristicNotification(readCharacteristic, true)
-
-                                        // CCCD 설정 // Subscribe 요청 --> IoT
-                                        val descriptor =
-                                            readCharacteristic!!.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
-                                        descriptor.value =
-                                            BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                                        gatt.writeDescriptor(descriptor)
-                                        Log.d(BLECONT_LOG_TAG, "읽기 특성에 대한 Notification 활성화 완료")
-
-                                    } catch (e: SecurityException) {
-                                        Log.e(
-                                            BLECONT_LOG_TAG,
-                                            "BLUETOOTH_CONNECT 권한이 없어 알림을 활성화할 수 없습니다."
-                                        )
-                                        useToastOnSubThread("BLUETOOTH_CONNECT 권한이 없어 알림을 활성화할 수 없습니다.")
-                                    }
-                                }
-                            } else {
-                                Log.e(BLECONT_LOG_TAG, "읽기 특성을 찾을 수 없습니다.")
-                                useToastOnSubThread("읽기 특성을 찾을 수 없습니다.")
-                            }
-                        } else {
-                            Log.e(BLECONT_LOG_TAG, "특정 서비스를 찾을 수 없습니다: $SERVICE_UUID")
-                            useToastOnSubThread("특정 서비스를 찾을 수 없습니다: $SERVICE_UUID")
-                        }
-                    } else {
-                        // GATT 서비스 검색 실패
-                        Log.e(BLECONT_LOG_TAG, "GATT 서비스 검색 실패: $status")
+                    // GATT 서비스 검색
+                    if (status != BluetoothGatt.GATT_SUCCESS) {
+                        Log.e(logTagBleController, "GATT 서비스 검색 실패: $status")
                         useToastOnSubThread("GATT 서비스 검색 실패: $status")
+                        return
+                    }
+                    Log.d(logTagBleController, "GATT 서비스 검색 성공")
+
+                    // 검색된 모든 서비스와 특성을 로그로 출력
+                    for (service in gatt.services) {
+                        Log.d(logTagBleController, "서비스 UUID: ${service.uuid}")
+                        for (characteristic in service.characteristics) {
+                            Log.d(logTagBleController, "  특성 UUID: ${characteristic.uuid}")
+                        }
+                    }
+
+                    // 서비스 UUID 찾기
+                    val service = gatt.getService(serviceUuid)
+                    if (service == null) {
+                        Log.e(logTagBleController, "특정 서비스를 찾을 수 없습니다: $serviceUuid")
+                        useToastOnSubThread("특정 서비스를 찾을 수 없습니다: $serviceUuid")
+                    }
+                    Log.d(logTagBleController, "특정 서비스 발견: $serviceUuid")
+
+                    // 쓰기 특성 등록
+                    bluetoothGattMap[device]?.writeCharacteristic =
+                        service.getCharacteristic(writeCharacteristicUuid)
+                    if ( bluetoothGattMap[device]?.writeCharacteristic == null){
+                        Log.e(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
+                        useToastOnSubThread("쓰기 특성을 찾을 수 없습니다.")
+                    }
+
+                    // 읽기 특성 등록
+                    bluetoothGattMap[device]?.readCharacteristic =
+                        service.getCharacteristic(readCharacteristicUuid)
+                    if (bluetoothGattMap[device]?.readCharacteristic == null){
+                        Log.e(logTagBleController, "읽기 특성을 찾을 수 없습니다.")
+                        useToastOnSubThread("읽기 특성을 찾을 수 없습니다.")
+                    }
+
+                    // CCCD 설정 // Notification Subscribe
+                    if (bluetoothGattMap[device]?.readCharacteristic != null) {
+                        gatt.setCharacteristicNotification(
+                            bluetoothGattMap[device]?.readCharacteristic, true)
+
+                        // CCCD 설정 // Subscribe 요청 --> IoT
+                        val descriptor =
+                            bluetoothGattMap[device]?.readCharacteristic?.getDescriptor(
+                                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+                        descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                        gatt.writeDescriptor(descriptor)
+                        Log.d(logTagBleController, "읽기 특성에 대한 Notification 활성화 완료")
                     }
                 }
 
@@ -391,10 +338,10 @@ class BleController(private val applicationContext: Context) {
                     characteristic: BluetoothGattCharacteristic
                 ) {
                     super.onCharacteristicChanged(gatt, characteristic)
-                    if (characteristic.uuid == READ_CHARACTERISTIC_UUID) {
+                    if (characteristic.uuid == readCharacteristicUuid) {
                         val receivedData = characteristic.value // 수신된 데이터
-                        receivedString = String(receivedData) // ByteArray를 문자열로 변환
-                        Log.i(BLECONT_LOG_TAG, "수신된 데이터: $characteristic")
+                        val receivedString = String(receivedData) // ByteArray를 문자열로 변환
+                        Log.i(logTagBleController, "수신된 데이터: $characteristic")
                         // LiveData 업데이트
                         updateReadData(receivedString)
                         // Toast로 수신된 데이터 표시
@@ -410,7 +357,8 @@ class BleController(private val applicationContext: Context) {
                     status: Int
                 ) {
                     super.onCharacteristicRead(gatt, characteristic, status)
-                    Log.i(BLECONT_LOG_TAG, "수신된 데이터: $characteristic status : ${status}")
+                    Log.i(logTagBleController, "수신된 데이터: $characteristic \n" +
+                            "status : $status")
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         // 읽은 데이터 가져오기
                         val data = characteristic.value
@@ -421,7 +369,7 @@ class BleController(private val applicationContext: Context) {
 
                         // UTF-8로 변환
                         val utf8String = String(data, Charsets.UTF_8)
-                        Log.i(BLECONT_LOG_TAG, "수신된 데이터 (UTF-8): $utf8String")
+                        Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
 
 //                    // EUC-KR로 변환
 //                    val eucKrString = String(data, Charsets.EUC_KR)
@@ -429,18 +377,18 @@ class BleController(private val applicationContext: Context) {
 
                         // ASCII로 변환
                         val asciiString = String(data, Charsets.US_ASCII)
-                        Log.i(BLECONT_LOG_TAG, "수신된 데이터 (ASCII): $asciiString")
+                        Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
 
                         // Hexadecimal로 출력
                         val hexString = data.joinToString(" ") { String.format("%02X", it) }
-                        Log.i(BLECONT_LOG_TAG, "수신된 데이터 (Hex): $hexString")
+                        Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
 
-                        receivedString = hexString
+                        val receivedString = hexString
                         updateReadData(receivedString)
                         // UI 스레드에서 Toast 표시
                         useToastOnSubThread("읽은 데이터: $receivedString")
                     } else {
-                        Log.e(BLECONT_LOG_TAG, "데이터 읽기 실패: $status")
+                        Log.e(logTagBleController, "데이터 읽기 실패: $status")
                     }
                 }
 
@@ -453,46 +401,40 @@ class BleController(private val applicationContext: Context) {
                     super.onCharacteristicWrite(gatt, characteristic, status)
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         // 데이터 전송 성공
-                        Log.i(BLECONT_LOG_TAG, "데이터 전송 성공: ${String(characteristic.value)}")
+                        Log.i(logTagBleController, "데이터 전송 성공: ${String(characteristic.value)}")
                     } else {
                         // 데이터 전송 실패
-                        Log.e(BLECONT_LOG_TAG, "데이터 전송 실패: $status")
+                        Log.e(logTagBleController, "데이터 전송 실패: $status")
                     }
                 }
 
             })
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "블루투스 연결 시도 중 보안 예외 발생: ${e.message}")
+        }
     }
 
     /**
      * 데이터 쓰기
      */
-    fun writeData(data: ByteArray) {
-        if (writeCharacteristic != null) {
-            writeCharacteristic?.value = data
+    fun writeData(data: ByteArray, bleDevice: BluetoothDevice ) {
+        try {
+            if (bluetoothGattMap[bleDevice]?.writeCharacteristic == null) {
+                Log.e(logTagBleController, "쓰기 특성 없음")
+                return
+            }
+            bluetoothGattMap[bleDevice]?.writeCharacteristic?.value = data
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(
-                        applicationContext,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    try {
-                        bluetoothGatt?.writeCharacteristic(writeCharacteristic)
-                    } catch (e: SecurityException) {
-                        Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없어 데이터를 전송할 수 없습니다.")
-                    }
-                } else {
-                    Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없습니다.")
-                }
-            } else {
+            if (hasBluetoothConnectPermission()) {
                 try {
-                    bluetoothGatt?.writeCharacteristic(writeCharacteristic)
-                } catch (e: SecurityException) {
-                    Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없어 데이터를 전송할 수 없습니다.")
+                    val gatt = bluetoothGattMap[bleDevice]?.gatt
+                    gatt?.writeCharacteristic(bluetoothGattMap[bleDevice]?.writeCharacteristic) // 쓰기 요청
+                } catch (e: Exception) {
+                    Log.e(logTagBleController, "데이터 전송 실패 ${e.message}")
                 }
             }
-        } else {
-            Log.e(BLECONT_LOG_TAG, "쓰기 특성이 초기화되지 않았습니다.")
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "블루투스 연결 시도 중 보안 예외 발생: ${e.message}")
         }
     }
 
@@ -500,66 +442,131 @@ class BleController(private val applicationContext: Context) {
      * App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
      * --> onCharacteristicRead 오버라이드 함수 호출
      */
-    fun requestReadData() {
-        if (readCharacteristic != null) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (ContextCompat.checkSelfPermission(
-                        applicationContext,
-                        Manifest.permission.BLUETOOTH_CONNECT
-                    ) == PackageManager.PERMISSION_GRANTED
-                ) {
-                    try {
-                        bluetoothGatt?.readCharacteristic(readCharacteristic) // 읽기 요청
-                        Log.i(BLECONT_LOG_TAG, "읽기 요청을 하였습니다.")
-                    } catch (e: SecurityException) {
-                        Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없어 데이터를 읽을 수 없습니다.")
-                    }
-                } else {
-                    Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없습니다.")
-                }
-            } else {
+    fun requestReadData(bleDevice: BluetoothDevice) {
+        try {
+            if (bluetoothGattMap[bleDevice]?.readCharacteristic == null) {
+                Log.e(logTagBleController, "읽기 특성 없음")
+            }
+            if (hasBluetoothConnectPermission()) {
                 try {
-                    bluetoothGatt?.readCharacteristic(readCharacteristic) // 읽기 요청
-                    Log.i(BLECONT_LOG_TAG, "읽기 요청을 하였습니다.")
-                } catch (e: SecurityException) {
-                    Log.e(BLECONT_LOG_TAG, "BLUETOOTH_CONNECT 권한이 없어 데이터를 읽을 수 없습니다.")
+                    val gatt = bluetoothGattMap[bleDevice]?.gatt
+                    Log.i(logTagBleController, "읽기 요청을 하였습니다.")
+                    gatt?.readCharacteristic(bluetoothGattMap[bleDevice]?.readCharacteristic) // 읽기 요청
+                } catch (e: Exception) {
+                    Log.e(logTagBleController, "Indicator 실패 : ${e.message}")
                 }
             }
-        } else {
-            Log.e(BLECONT_LOG_TAG, "읽기 특성이 초기화되지 않았습니다.")
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "블루투스 연결 시도 중 보안 예외 발생: ${e.message}")
         }
     }
 
     /**
-     * 읽은 데이터 반환
+     * 페어링된 기기 목록 가져오기
      */
-    fun getReadData(): String {
-        return receivedString
+    fun getBondedDevices(): Set<BluetoothDevice>? {
+        if(!::bluetoothAdapter.isInitialized){
+            return null
+        }
+        if (hasBluetoothConnectPermission()){
+            try {
+                return bluetoothAdapter.bondedDevices
+            } catch (e: SecurityException) {
+                Log.e(logTagBleController, "bluetoothAdapter.bondedDevices Failed : ${e.message}")
+                return null
+            }
+        }
+        return null
     }
-
 
     /**
-     * BLE 연결 해제
+     * 현재 연결된 BLE 기기 목록 가져오기
      */
-    fun disconnect() {
-        bluetoothGatt?.disconnect()
-        bluetoothGatt?.close()
-        bluetoothGatt = null
+    fun getConnectedDevices(): List<BluetoothDevice> {
+        if(!::bluetoothManager.isInitialized){
+            return emptyList()
+        }
+        if (hasBluetoothConnectPermission()){
+            try {
+                return bluetoothManager.getConnectedDevices(BluetoothProfile.GATT)
+            } catch (e: SecurityException) {
+                Log.e(logTagBleController, "getConnectedDevices : ${e.message}")
+                return emptyList()
+            }
+        }
+        return emptyList()
     }
 
+//    /**
+//     * 특정 기기 연결 해제
+//     */
+//    fun disconnectDevice(device: BluetoothDevice) {
+//        val gatt:BluetoothGatt = bluetoothGattMap[device] ?: return
+//        if (hasBluetoothConnectPermission()){
+//            try {
+//                gatt.disconnect()
+//                gatt.close()
+//                bluetoothGattMap.remove(device)
+//            } catch (e: SecurityException) {
+//                Log.e(logTagBleController, "disconnectDevice Failed ${e.message}")
+//            }
+//        }
+//    }
 
-// Callback or 비슷한 함수 들
+    /**
+     * 모든 기기 연결 해제
+     */
+    fun disconnectAllDevices() {
+        Log.i(logTagBleController, "모든 기기 연결 해제 시도 : $bluetoothGattMap")
+        useToastOnSubThread("모든 기기 연결 해제 시도 : $bluetoothGattMap")
+
+        val iterator = bluetoothGattMap.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            val device = entry.key
+            val deviceInfo:BleDeviceInfo = entry.value
+
+            if (hasBluetoothConnectPermission()) {
+                try {
+                    deviceInfo.gatt?.disconnect()
+                    deviceInfo.gatt?.close()
+                    iterator.remove() // Iterator의 remove() 메서드를 사용하여 안전하게 제거
+                } catch (e: SecurityException) {
+                    Log.e(
+                        logTagBleController, "disconnectAllDevices Failed ${e.message}" +
+                                "해제 실패 : $device"
+                    )
+                }
+            }
+        }
+
+        Log.i(logTagBleController, "모든 기기 연결 해제 결과 : $bluetoothGattMap")
+    }
+
+    /**
+     * 페어링된 기기 삭제
+     */
+    fun removeBond(device: BluetoothDevice): Boolean {
+        try {
+            val method: Method = device.javaClass.getMethod("removeBond")
+            return method.invoke(device) as Boolean
+        } catch (e: Exception) {
+            Log.e(logTagBleController, "페어링된 기기 삭제 실패: ${e.message}")
+            return false
+        }
+    }
+
     /**
      * Bluetooth 활성화 요청 결과 처리
      */
     fun handleBluetoothIntentResult(result: ActivityResult) {
         // 특정 작업(예: 권한 요청, 다른 Activity 호출 등)의 결과를 처리할 Callback 함수
         if (result.resultCode == Activity.RESULT_OK) {
-            Log.i(BLECONT_LOG_TAG, "블루투스가 활성화되었습니다.")
-            permissionStatus["블루투스 권한"] = true
+            Log.i(logTagBleController, "블루투스가 활성화되었습니다.")
+            permissionStatus.bluetoothEnabled = true
         } else {
-            Log.i(BLECONT_LOG_TAG, "블루투스 활성화가 취소되었습니다.")
-            permissionStatus["블루투스 권한"] = false
+            Log.i(logTagBleController, "블루투스 활성화가 취소되었습니다.")
+            permissionStatus.bluetoothEnabled = false
         }
     }
 
@@ -575,8 +582,66 @@ class BleController(private val applicationContext: Context) {
     }
 
     // 데이터를 업데이트하는 메서드
-    fun updateReadData(data: String) {
+    fun updateReadData(data: Any) {
         _readData.postValue(data) // LiveData에 새로운 데이터 설정
     }
 
+    // 권한 확인 함수
+    fun hasBluetoothConnectPermission(): Boolean {
+        /**
+         * 안드로이드 S 이상 (최신)
+         *  - 필요 권한 : 블루투스 활성화, ACCESS_FINE_LOCATION, BLUETOOTH_SCAN, BLUETOOTH_CONNECT
+         * 안드로이드 S 미만 (구형)
+         *  - 필요 권한 : 블루투스 활성화, ACCESS_FINE_LOCATION
+         *  - 불필요 권한 : BLUETOOTH_SCAN, BLUETOOTH_CONNECT
+         * */
+
+        // 블루투스 활성화
+        permissionStatus.bluetoothEnabled = bluetoothAdapter.isEnabled
+
+        // ACCESS_FINE_LOCATION
+        permissionStatus.locationPermission = ContextCompat.checkSelfPermission( applicationContext,
+            Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {  // 최신폰 일 경우
+            // BLUETOOTH_SCAN
+            permissionStatus.bluetoothScanPermission = ContextCompat.checkSelfPermission( applicationContext,
+                Manifest.permission.BLUETOOTH_SCAN) == PackageManager.PERMISSION_GRANTED
+
+            // BLUETOOTH_CONNECT
+            permissionStatus.bluetoothConnectPermission = ContextCompat.checkSelfPermission(applicationContext,
+                Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+
+        } else{ // Android S 미만인 구형 폰 인 경우
+            // BLUETOOTH_SCAN
+            permissionStatus.bluetoothScanPermission = true
+            // BLUETOOTH_CONNECT
+            permissionStatus.bluetoothConnectPermission = true
+        }
+
+        // 모든 권한이 허용되었는지 확인
+        val hasAllPermissions = listOf(
+            permissionStatus.bluetoothEnabled,
+            permissionStatus.locationPermission,
+            permissionStatus.bluetoothScanPermission,
+            permissionStatus.bluetoothConnectPermission
+        ).all { it == true }
+
+        if (!hasAllPermissions) {
+            // 권한이 하나라도 부족한 경우 Toast 메시지 표시
+            val missingPermissions = listOf(
+                "블루투스 활성화" to permissionStatus.bluetoothEnabled,
+                "ACCESS_FINE_LOCATION" to permissionStatus.locationPermission,
+                "BLUETOOTH_SCAN" to permissionStatus.bluetoothScanPermission,
+                "BLUETOOTH_CONNECT" to permissionStatus.bluetoothConnectPermission
+            ).filter { !it.second }
+                .map { it.first }
+                .joinToString(", ")
+
+            // useToastOnSubThread 함수 사용
+            useToastOnSubThread("$missingPermissions 권한 필요함")
+        }
+
+        return hasAllPermissions
+    }
 }

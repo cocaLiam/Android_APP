@@ -5,6 +5,7 @@ import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 
 // UI Pack
@@ -41,7 +42,7 @@ class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
     private val bleController = BleController(this) // MainActivity는 Context를 상속받음
-    private val handler = Handler()
+    val handler = Handler(Looper.getMainLooper())
 
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
     private var isPopupVisible = false
@@ -184,7 +185,8 @@ class MainActivity : AppCompatActivity() {
             val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
             if (inputData.isNotEmpty()) {
                 val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
-                bleController.writeData(dataToSend, (bleController.getConnectedDevices())[0]) // BLE로 데이터 전송
+                val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
                 Toast.makeText(this, "Data Sent: $inputData", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Please enter data to send", Toast.LENGTH_SHORT).show()
@@ -194,7 +196,8 @@ class MainActivity : AppCompatActivity() {
         // ( 트리거 : APP )
         // 기기에 Info Request 를 해서 받는 Read Data
         btnRequestReadData.setOnClickListener {
-            bleController.requestReadData((bleController.getConnectedDevices())[0])
+            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+            bleController.requestReadData(macAddress.address)
         }
 
         // LiveData 관찰 설정

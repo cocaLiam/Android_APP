@@ -24,7 +24,6 @@ import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
@@ -48,7 +47,7 @@ data class PermissionStatus(
 )
 
 data class BleDeviceInfo(
-//    var device: BluetoothDevice? = null,
+    var device: BluetoothDevice? = null,
     var gatt: BluetoothGatt? = null,
     var writeCharacteristic: BluetoothGattCharacteristic? = null,
     var readCharacteristic: BluetoothGattCharacteristic? = null
@@ -93,7 +92,7 @@ class BleController(private val applicationContext: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
-    private var bluetoothGattMap: MutableMap<BluetoothDevice, BleDeviceInfo> = mutableMapOf()
+    private var bluetoothGattMap: MutableMap<String, BleDeviceInfo> = mutableMapOf()
 
     /**
      * BLE 모듈 초기화
@@ -253,27 +252,40 @@ class BleController(private val applicationContext: Context) {
                     newState: Int
                 ) {
                     super.onConnectionStateChange(gatt, status, newState)
-                    if (newState == BluetoothProfile.STATE_CONNECTED) {
-                        // GATT 서버에 연결 성공
-                        Log.d(logTagBleController, "GATT 서버에 연결되었습니다.")
+                    when (newState) {
+                        BluetoothProfile.STATE_CONNECTED -> {
+                            // GATT 서버에 연결 성공
+                            Log.d(logTagBleController, "GATT 서버에 연결되었습니다.")
 
-                        val bleDeviceInfo = BleDeviceInfo()
-                        bleDeviceInfo.gatt = gatt
-                        bluetoothGattMap[device] = bleDeviceInfo
-                        onConnectionStateChange(true)
+                            val bleDeviceInfo = BleDeviceInfo()
+                            bleDeviceInfo.device = device
+                            bleDeviceInfo.gatt = gatt
+                            bluetoothGattMap[device.address] = bleDeviceInfo
+                            onConnectionStateChange(true)
 
-                        if (hasBluetoothConnectPermission()) {
-                            gatt.discoverServices() // GATT 서비스 검색
+                            if (hasBluetoothConnectPermission()) {
+                                gatt.discoverServices() // GATT 서비스 검색
+                            }
                         }
-                    } else if (newState == BluetoothProfile.STATE_DISCONNECTED) {
-                        // GATT 서버 연결 해제
-                        Log.d(logTagBleController, "GATT 서버 연결이 해제되었습니다.")
-                        bluetoothGattMap.remove(device)
-                        onConnectionStateChange(false)
+                        BluetoothProfile.STATE_DISCONNECTED -> {
+                            // GATT 서버 연결 해제
+                            Log.d(logTagBleController, "GATT 서버 연결이 해제되었습니다.")
+                            bluetoothGattMap.remove(device.address)
+                            onConnectionStateChange(false)
+                        }
+                        BluetoothProfile.STATE_CONNECTING -> { }
+                        BluetoothProfile.STATE_DISCONNECTING -> { }
+                        else -> {
+                            Log.w(logTagBleController, "알 수 없는 GATT 상태: $newState")
+                            useToastOnSubThread( "알 수 없는 GATT 상태: $newState")
+                        }
                     }
                 }
 
                 override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
+                    /**
+                     * gatt.discoverServices() // GATT 서비스 검색 << 이후 발동 되는 함수
+                     * */
                     super.onServicesDiscovered(gatt, status)
 
                     // GATT 서비스 검색
@@ -297,51 +309,48 @@ class BleController(private val applicationContext: Context) {
                     if (service == null) {
                         Log.e(logTagBleController, "특정 서비스를 찾을 수 없습니다: $serviceUuid")
                         useToastOnSubThread("특정 서비스를 찾을 수 없습니다: $serviceUuid")
+                        return // service 없으면 read 고 write 고 특성 찾기 종료 처리
                     }
                     Log.d(logTagBleController, "특정 서비스 발견: $serviceUuid")
 
+                    val bleInfo: BleDeviceInfo = bluetoothGattMap[device.address]!!
                     // 쓰기 특성 등록
-                    bluetoothGattMap[device]?.writeCharacteristic =
-                        service.getCharacteristic(writeCharacteristicUuid)
-                    if ( bluetoothGattMap[device]?.writeCharacteristic == null){
-                        Log.e(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
-                        useToastOnSubThread("쓰기 특성을 찾을 수 없습니다.")
+                    bleInfo.writeCharacteristic = service.getCharacteristic(writeCharacteristicUuid).apply {
+                        if (this ==null) Log.e(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
                     }
 
                     // 읽기 특성 등록
-                    bluetoothGattMap[device]?.readCharacteristic =
-                        service.getCharacteristic(readCharacteristicUuid)
-                    if (bluetoothGattMap[device]?.readCharacteristic == null){
-                        Log.e(logTagBleController, "읽기 특성을 찾을 수 없습니다.")
-                        useToastOnSubThread("읽기 특성을 찾을 수 없습니다.")
+                    bleInfo.readCharacteristic = service.getCharacteristic(readCharacteristicUuid).apply {
+                        if (this ==null) Log.e(logTagBleController, "일기 특성을 찾을 수 없습니다.")
                     }
 
-                    // CCCD 설정 // Notification Subscribe
-                    if (bluetoothGattMap[device]?.readCharacteristic != null) {
-                        gatt.setCharacteristicNotification(
-                            bluetoothGattMap[device]?.readCharacteristic, true)
-
-                        // CCCD 설정 // Subscribe 요청 --> IoT
-                        val descriptor =
-                            bluetoothGattMap[device]?.readCharacteristic?.getDescriptor(
-                                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
-                        descriptor?.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        gatt.writeDescriptor(descriptor)
-                        Log.d(logTagBleController, "읽기 특성에 대한 Notification 활성화 완료")
-                    }
+                    // Notification Subscribe 기능 사용 할 일이 없으므로 주석처리
+//                    // CCCD 설정 // Notification Subscribe
+//                    if (bleInfo.readCharacteristic != null) {
+//                        gatt.setCharacteristicNotification(
+//                            bleInfo.readCharacteristic, true)
+//
+//                        // CCCD 설정 // Subscribe 요청 --> IoT
+//                        val descriptor =
+//                            bleInfo.readCharacteristic!!.getDescriptor(
+//                                UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"))
+//                        descriptor!!.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+//                        gatt.writeDescriptor(descriptor)
+//                        Log.d(logTagBleController, "읽기 특성에 대한 Notification 활성화 완료")
+//                    }
                 }
 
                 // ( 트리거 : IoT기기 ) 기기가 Data 전송 > App 이 읽음
                 // 읽기 특성에 대한 알림(Notification)이 활성화된 경우, 데이터가 수신될 때 호출되는 콜백
                 override fun onCharacteristicChanged(
                     gatt: BluetoothGatt,
-                    characteristic: BluetoothGattCharacteristic
+                    characteristic: BluetoothGattCharacteristic,
+                    recievedData: ByteArray
                 ) {
-                    super.onCharacteristicChanged(gatt, characteristic)
+                    super.onCharacteristicChanged(gatt, characteristic, recievedData)
                     if (characteristic.uuid == readCharacteristicUuid) {
-                        val receivedData = characteristic.value // 수신된 데이터
-                        val receivedString = String(receivedData) // ByteArray를 문자열로 변환
-                        Log.i(logTagBleController, "수신된 데이터: $characteristic")
+                        val receivedString = String(recievedData) // ByteArray를 문자열로 변환
+                        Log.i(logTagBleController, "수신된 데이터: $recievedData")
                         // LiveData 업데이트
                         updateReadData(receivedString)
                         // Toast로 수신된 데이터 표시
@@ -354,18 +363,19 @@ class BleController(private val applicationContext: Context) {
                 override fun onCharacteristicRead(
                     gatt: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
+                    recievedData: ByteArray,
                     status: Int
                 ) {
-                    super.onCharacteristicRead(gatt, characteristic, status)
-                    Log.i(logTagBleController, "수신된 데이터: $characteristic \n" +
+                    super.onCharacteristicRead(gatt, characteristic, recievedData, status)
+                    Log.i(logTagBleController, "수신된 데이터: $recievedData \n" +
                             "status : $status")
                     if (status == BluetoothGatt.GATT_SUCCESS) {
                         // 읽은 데이터 가져오기
-                        val data = characteristic.value
+                        val data = recievedData
 
-//                    // ByteArray를 문자열로 변환
-//                    receivedString = String(data) // 기본적으로 UTF-8로 변환
-//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (String): $receivedString")
+                        // ByteArray를 문자열로 변환
+                        val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
+                        Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
 
                         // UTF-8로 변환
                         val utf8String = String(data, Charsets.UTF_8)
@@ -383,10 +393,9 @@ class BleController(private val applicationContext: Context) {
                         val hexString = data.joinToString(" ") { String.format("%02X", it) }
                         Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
 
-                        val receivedString = hexString
-                        updateReadData(receivedString)
+                        updateReadData(hexString)
                         // UI 스레드에서 Toast 표시
-                        useToastOnSubThread("읽은 데이터: $receivedString")
+                        useToastOnSubThread("읽은 데이터: $hexString")
                     } else {
                         Log.e(logTagBleController, "데이터 읽기 실패: $status")
                     }
@@ -417,18 +426,26 @@ class BleController(private val applicationContext: Context) {
     /**
      * 데이터 쓰기
      */
-    fun writeData(data: ByteArray, bleDevice: BluetoothDevice ) {
+    fun writeData(data: ByteArray, macAddress: String ) {
         try {
-            if (bluetoothGattMap[bleDevice]?.writeCharacteristic == null) {
-                Log.e(logTagBleController, "쓰기 특성 없음")
-                return
-            }
-            bluetoothGattMap[bleDevice]?.writeCharacteristic?.value = data
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: return
+            bleInfo.gatt ?: return
 
             if (hasBluetoothConnectPermission()) {
                 try {
-                    val gatt = bluetoothGattMap[bleDevice]?.gatt
-                    gatt?.writeCharacteristic(bluetoothGattMap[bleDevice]?.writeCharacteristic) // 쓰기 요청
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        bleInfo.gatt!!.writeCharacteristic(
+                            bleInfo.writeCharacteristic!!,
+                            data,
+                            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        )
+                    } else {
+                        // Android 13 (API 33) 미만
+                        bleInfo.writeCharacteristic!!.value = data
+                        bleInfo.writeCharacteristic!!.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                        bleInfo.gatt!!.writeCharacteristic(bleInfo.writeCharacteristic!!)
+                    }
+
                 } catch (e: Exception) {
                     Log.e(logTagBleController, "데이터 전송 실패 ${e.message}")
                 }
@@ -442,16 +459,14 @@ class BleController(private val applicationContext: Context) {
      * App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
      * --> onCharacteristicRead 오버라이드 함수 호출
      */
-    fun requestReadData(bleDevice: BluetoothDevice) {
+    fun requestReadData(macAddress: String) {
         try {
-            if (bluetoothGattMap[bleDevice]?.readCharacteristic == null) {
-                Log.e(logTagBleController, "읽기 특성 없음")
-            }
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: return
+            bleInfo.gatt ?: return
+
             if (hasBluetoothConnectPermission()) {
                 try {
-                    val gatt = bluetoothGattMap[bleDevice]?.gatt
-                    Log.i(logTagBleController, "읽기 요청을 하였습니다.")
-                    gatt?.readCharacteristic(bluetoothGattMap[bleDevice]?.readCharacteristic) // 읽기 요청
+                    bleInfo.gatt!!.readCharacteristic(bleInfo.readCharacteristic) // 읽기 요청
                 } catch (e: Exception) {
                     Log.e(logTagBleController, "Indicator 실패 : ${e.message}")
                 }
@@ -546,10 +561,13 @@ class BleController(private val applicationContext: Context) {
     /**
      * 페어링된 기기 삭제
      */
-    fun removeBond(device: BluetoothDevice): Boolean {
+    fun removeBond(macAddress: String): Boolean {
         try {
-            val method: Method = device.javaClass.getMethod("removeBond")
-            return method.invoke(device) as Boolean
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: return false
+            bleInfo.device ?: return false
+
+            val method: Method = bleInfo.device!!.javaClass.getMethod("removeBond")
+            return method.invoke(bleInfo.device) as Boolean
         } catch (e: Exception) {
             Log.e(logTagBleController, "페어링된 기기 삭제 실패: ${e.message}")
             return false

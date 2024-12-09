@@ -129,7 +129,6 @@ class BleController(private val applicationContext: Context) {
      * BLE 권한 요청
      */
     fun requestBlePermission(activity: Activity): Boolean {
-        //        val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
         hasBluetoothConnectPermission()
 
         // 1. 블루투스 활성화 요청 <System Setting>
@@ -299,7 +298,9 @@ class BleController(private val applicationContext: Context) {
                         for (characteristic in service.characteristics) {
                             charList.add("${getPropertiesString(characteristic.properties)} >> ${characteristic.uuid}")
                             Log.d(logTagBleController, "  특성 UUID: ${characteristic.uuid}")
+                            charList.add(" - ")
                         }
+                        charList.add(" ========= ")
                     }
                     updateReadData(charList)
 
@@ -309,19 +310,20 @@ class BleController(private val applicationContext: Context) {
                         Log.e(logTagBleController, "특정 서비스를 찾을 수 없습니다: $serviceUuid")
                         useToastOnSubThread("특정 서비스를 찾을 수 없습니다: $serviceUuid")
                         return // service 없으면 read 고 write 고 특성 찾기 종료 처리
-                    }
-                    Log.d(logTagBleController, "특정 서비스 발견: $serviceUuid")
+                    } else Log.d(logTagBleController, "서비스 발견: $serviceUuid")
 
                     val bleInfo: BleDeviceInfo = bluetoothGattMap[device.address]!!
                     // 쓰기 특성 등록
                     bleInfo.writeCharacteristic = service.getCharacteristic(writeCharacteristicUuid).apply {
-                        if (this ==null) Log.e(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
-                    }
+                            if (this == null) Log.w(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
+                            else Log.d(logTagBleController, "쓰기 특성 발견: $serviceUuid")
+                        }
 
                     // 읽기 특성 등록
                     bleInfo.readCharacteristic = service.getCharacteristic(readCharacteristicUuid).apply {
-                        if (this ==null) Log.e(logTagBleController, "일기 특성을 찾을 수 없습니다.")
-                    }
+                            if (this == null) Log.w(logTagBleController, "읽기 특성을 찾을 수 없습니다.")
+                            else Log.d(logTagBleController, "읽기 특성 발견: $serviceUuid")
+                        }
 
                     // Notification Subscribe 기능 사용 할 일이 없으므로 주석처리
 //                    // CCCD 설정 // Notification Subscribe

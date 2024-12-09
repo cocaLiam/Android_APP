@@ -75,7 +75,8 @@
         android:background="@android:color/darker_gray"
         android:enabled="false"
         android:focusable="false"
-        android:hint="수신 데이터 출력창" />
+        android:hint="수신 데이터 출력창"
+        android:textSize="10sp"/>
 
     <!-- Disconnect 버튼 -->
     <Button

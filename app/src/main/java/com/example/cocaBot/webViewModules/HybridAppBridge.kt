@@ -71,7 +71,7 @@ class HybridAppBridge(private val webView: WebView) {
 //            Log.e("KeyCheck", "macAddress 또는 deviceName 키가 누락되었습니다.")
 //            throw IllegalArgumentException("macAddress 또는 deviceName 키가 필요합니다.")
 //        }
-        
+
         // 필수 키 목록
         val requiredKeys = setOf("macAddress", "deviceName")
 

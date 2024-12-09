@@ -75,25 +75,42 @@ class HybridAppBridge(private val webView: WebView) {
     }
 
     fun resConnect(vararg pairs: Pair<String, Any?>) {
-        // 키 검사
-        val keys = pairs.map { it.first } // pairs에서 key만 추출
-        if (!keys.contains("macAddress") || !keys.contains("deviceName")) {
-            Log.e("KeyCheck", "macAddress 또는 deviceName 키가 누락되었습니다.")
-            throw IllegalArgumentException("macAddress 또는 deviceName 키가 필요합니다.")
-        }
+        // 필수 키 목록
+        val requiredKeys = setOf("macAddress", "deviceName")
 
+        // 키 검사
+        val keys = pairs.map { it.first }.toSet() // Set으로 변환
+        if (!keys.containsAll(requiredKeys)) {
+            Log.e("KeyCheck", "macAddress 또는 deviceName 키가 누락되었습니다.")
+        }
         val jsonObject = JSONObject()
         for ((key, value) in pairs) {
             jsonObject.put(key, value)
         }
         val functionName = object {}.javaClass.enclosingMethod?.name
+        val jsonString = jsonObject.toString() // JSON 문자열로 변환
         webView.post {
             Log.d("DEBUG", "Sending JSON to JS: $jsonObject") // 디버깅 로그 추가
-            webView.evaluateJavascript("javascript:$functionName(${jsonObject})") { result ->
+            webView.evaluateJavascript("javascript:$functionName(${jsonString})") { result ->
                 Log.d("BRIDGE_LOG_TAG", "Result from JavaScript: $result")
             }
         }
     }
+
+//    fun resConnect(vararg pairs: Pair<String, Any?>) {
+//        val jsonObject = JSONObject()
+//        for ((key, value) in pairs) {
+//            jsonObject.put(key, value)
+//        }
+//        val functionName = object {}.javaClass.enclosingMethod?.name
+//        webView.post {
+//            val jsonString = jsonObject.toString() // JSON 문자열로 변환
+//            Log.d("DEBUG", "Sending JSON to JS: $jsonObject") // 디버깅 로그 추가
+//            webView.evaluateJavascript("javascript:$functionName(${jsonString})") { result ->
+//                Log.d("BRIDGE_LOG_TAG", "Result from JavaScript: $result")
+//            }
+//        }
+//    }
 
     /**
      * Web(client) -> APP(server) API 호출

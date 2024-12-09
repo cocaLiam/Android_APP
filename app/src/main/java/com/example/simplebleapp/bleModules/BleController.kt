@@ -48,6 +48,7 @@ data class PermissionStatus(
 
 data class BleDeviceInfo(
     var device: BluetoothDevice? = null,
+    var deviceName: String? = null,
     var gatt: BluetoothGatt? = null,
     var writeCharacteristic: BluetoothGattCharacteristic? = null,
     var readCharacteristic: BluetoothGattCharacteristic? = null
@@ -259,6 +260,7 @@ class BleController(private val applicationContext: Context) {
 
                             val bleDeviceInfo = BleDeviceInfo()
                             bleDeviceInfo.device = device
+                            bleDeviceInfo.deviceName = device.name
                             bleDeviceInfo.gatt = gatt
                             bluetoothGattMap[device.address] = bleDeviceInfo
                             onConnectionStateChange(true)

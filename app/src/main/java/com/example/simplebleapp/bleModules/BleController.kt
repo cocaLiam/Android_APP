@@ -294,10 +294,10 @@ class BleController(private val applicationContext: Context) {
                     val charList = mutableListOf<Any>()
                     // 검색된 모든 서비스와 특성을 로그로 출력
                     for (service in gatt.services) {
-                        charList.add(service.uuid)
                         Log.d(logTagBleController, "서비스 UUID: ${service.uuid}")
+                        charList.add("서비스 : ${service.uuid}")
                         for (characteristic in service.characteristics) {
-                            charList.add("${characteristic.properties} : ${characteristic.uuid}")
+                            charList.add("${getPropertiesString(characteristic.properties)} >> ${characteristic.uuid}")
                             Log.d(logTagBleController, "  특성 UUID: ${characteristic.uuid}")
                         }
                     }
@@ -601,6 +601,35 @@ class BleController(private val applicationContext: Context) {
     // 데이터를 업데이트하는 메서드
     fun updateReadData(data: Any) {
         _readData.postValue(data) // LiveData에 새로운 데이터 설정
+    }
+
+    fun getPropertiesString(properties: Int): String {
+
+        if (properties and BluetoothGattCharacteristic.PROPERTY_BROADCAST != 0) {
+            return "BROADCAST"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_READ != 0) {
+            return "READ"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE != 0) {
+            return "WRITE_NO_RESPONSE"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0) {
+            return "WRITE"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0) {
+            return "NOTIFY"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) {
+            return "INDICATE"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_SIGNED_WRITE != 0) {
+            return "SIGNED_WRITE"
+        }
+        if (properties and BluetoothGattCharacteristic.PROPERTY_EXTENDED_PROPS != 0) {
+            return "EXTENDED_PROPS"
+        }
+        return "Unknown"
     }
 
     // 권한 확인 함수

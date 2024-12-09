@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "cocabot APP"
+rootProject.name = "SimpleWebviewApp"
 include(":app")
  

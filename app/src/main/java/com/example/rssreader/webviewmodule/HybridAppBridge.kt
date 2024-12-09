@@ -74,6 +74,21 @@ class HybridAppBridge(private val webView: WebView) {
         }
     }
 
+    fun resConnect(vararg pairs: Pair<String, Any?>) {
+        val jsonObject = JSONObject()
+        for ((key, value) in pairs) {
+            jsonObject.put(key, value)
+        }
+        val functionName = object {}.javaClass.enclosingMethod?.name
+        webView.post {
+            val jsonString = jsonObject.toString() // JSON 문자열로 변환
+            Log.d("DEBUG", "Sending JSON to JS: $jsonString") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonString)") { result ->
+                Log.d("BRIDGE_LOG_TAG", "Result from JavaScript: $result")
+            }
+        }
+    }
+
     /**
      * Web(client) -> APP(server) API 호출
      * Web에서 App으로 데이터를 전달받는 인터페이스

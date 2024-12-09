@@ -38,12 +38,19 @@ class MainActivity : ComponentActivity() {
 
         // 캐시가 남아 있으면
         webView.clearCache(true)
+
         buttonSendData.setOnClickListener{
             // Web으로 데이터 전달 예제
-            sendDataToWeb(
-                "key" to "value",
-                "key2" to "value2")
+            hybridAppBridge.resConnect(
+                "macAddress" to "value",
+                "deviceName" to "value2")
         }
+//        buttonSendData.setOnClickListener{
+//            // Web으로 데이터 전달 예제
+//            sendDataToWeb(
+//                "key" to "value",
+//                "key2" to "value2")
+//        }
 
     }
 

@@ -130,11 +130,10 @@ class BleController(private val applicationContext: Context) {
      */
     fun requestBlePermission(activity: Activity): Boolean {
         //        val bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
+        hasBluetoothConnectPermission()
 
         // 1. 블루투스 활성화 요청 <System Setting>
-        if (hasBluetoothConnectPermission()) {
-            permissionStatus.bluetoothEnabled = true
-        } else {
+        if(!permissionStatus.bluetoothEnabled){
             // BLE 권한 요청 런처 실행
             val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
             enableBluetoothLauncher.launch(enableBtIntent) // registerForActivityResult로 처리
@@ -142,9 +141,7 @@ class BleController(private val applicationContext: Context) {
         }
 
         // 2. Android 12(API 31) 이상에서 BLE 스캔 권한 요청 <Permission Request>
-        if (hasBluetoothConnectPermission()) {
-            permissionStatus.bluetoothScanPermission = true
-        } else {
+        if(!permissionStatus.bluetoothScanPermission){
             ActivityCompat.requestPermissions(
                 activity,
                 arrayOf(Manifest.permission.BLUETOOTH_SCAN),
@@ -154,9 +151,7 @@ class BleController(private val applicationContext: Context) {
         }
 
         // 3. 위치 정보 권한 요청 <Permission Request>
-        if (hasBluetoothConnectPermission()) {
-            permissionStatus.locationPermission = true
-        } else {
+        if(!permissionStatus.locationPermission){
             ActivityCompat.requestPermissions(
                 activity,
                 arrayOf(Manifest.permission.ACCESS_FINE_LOCATION),
@@ -166,9 +161,7 @@ class BleController(private val applicationContext: Context) {
         }
 
         // 4. 블루투스 연결 권한 요청 <Permission Request>
-        if (hasBluetoothConnectPermission()) {
-            permissionStatus.bluetoothConnectPermission = true
-        } else {
+        if(!permissionStatus.bluetoothConnectPermission){
             ActivityCompat.requestPermissions(
                 activity,
                 arrayOf(Manifest.permission.BLUETOOTH_CONNECT),
@@ -298,13 +291,17 @@ class BleController(private val applicationContext: Context) {
                     }
                     Log.d(logTagBleController, "GATT 서비스 검색 성공")
 
+                    val charList = mutableListOf<Any>()
                     // 검색된 모든 서비스와 특성을 로그로 출력
                     for (service in gatt.services) {
+                        charList.add(service.uuid)
                         Log.d(logTagBleController, "서비스 UUID: ${service.uuid}")
                         for (characteristic in service.characteristics) {
+                            charList.add("${characteristic.properties} : ${characteristic.uuid}")
                             Log.d(logTagBleController, "  특성 UUID: ${characteristic.uuid}")
                         }
                     }
+                    updateReadData(charList)
 
                     // 서비스 UUID 찾기
                     val service = gatt.getService(serviceUuid)

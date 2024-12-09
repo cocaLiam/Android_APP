@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "com.example.simplebleapp"
+    namespace = "com.example.cocaBot"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.simplebleapp"
+        applicationId = "com.example.cocaBot"
         minSdk = 24
         targetSdk = 34
         versionCode = 1

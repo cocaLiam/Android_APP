@@ -1,8 +1,7 @@
-package com.example.simplebleapp.bleModules
+package com.example.cocaBot.bleModules
 
 import android.bluetooth.BluetoothDevice
 import android.content.Context
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -10,7 +9,7 @@ import android.widget.RadioButton
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.example.simplebleapp.R
+import com.example.cocaBot.R
 
 class ScanListAdapter() :
     RecyclerView.Adapter<ScanListAdapter.ScanViewHolder>() {

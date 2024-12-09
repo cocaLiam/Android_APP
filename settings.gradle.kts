@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "simpleBleApp"
+rootProject.name = "cocaBot"
 include(":app")
  

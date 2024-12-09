@@ -1,4 +1,4 @@
-package com.example.simplebleapp
+package com.example.cocaBot
 
 import org.junit.Test
 

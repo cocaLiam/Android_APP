@@ -1,10 +1,12 @@
-package com.example.simplebleapp
+package com.example.cocaBot
 
 // Operator Pack
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
+import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 
 // UI Pack
@@ -34,19 +36,19 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Observer
 
 // Custom Package
-import com.example.simplebleapp.bleModules.ScanListAdapter
-import com.example.simplebleapp.bleModules.BleController
+import com.example.cocaBot.bleModules.ScanListAdapter
+import com.example.cocaBot.bleModules.BleController
 
 class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
     private val bleController = BleController(this) // MainActivity는 Context를 상속받음
-    private val handler = Handler()
+    private val handler = Handler(Looper.getMainLooper())
 
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
     private var isPopupVisible = false
 
-    private val MAIN_LOG_TAG = " - MainActivity "
+    private val mainLogTag = " - MainActivity "
 
     // View 변수 선언
     private lateinit var btnScanStart: Button
@@ -143,9 +145,9 @@ class MainActivity : AppCompatActivity() {
 
         // Paring check 버튼 클릭 리스너
         btnParingCheck.setOnClickListener {
-            val bondedDevices: Set<BluetoothDevice>? = bleController.getBondedDevices()
-            Log.i(MAIN_LOG_TAG, "bondedDevices : $bondedDevices")
-            Log.i(MAIN_LOG_TAG, "getConnectedDevices : ${bleController.getConnectedDevices()}")
+            val bondedDevices: Set<BluetoothDevice>? = bleController.getPairedDevices()
+            Log.i(mainLogTag, "bondedDevices : $bondedDevices")
+            Log.i(mainLogTag, "getConnectedDevices : ${bleController.getConnectedDevices()}")
             if (bondedDevices == null){
                 bleController.updateReadData("")
             }else{
@@ -172,10 +174,10 @@ class MainActivity : AppCompatActivity() {
 
             if (isChecked) {
                 // ToggleButton이 ON 상태일 때 실행할 코드
-                Toast.makeText(this, "자동 연결 모드 ON", Toast.LENGTH_SHORT).show()
+                Log.i(mainLogTag,"자동 연결 모드 ON")
             } else {
                 // ToggleButton이 OFF 상태일 때 실행할 코드
-                Toast.makeText(this, "자동 연결 모드 OFF", Toast.LENGTH_SHORT).show()
+                Log.i(mainLogTag,"자동 연결 모드 OFF")
             }
         }
 
@@ -184,17 +186,19 @@ class MainActivity : AppCompatActivity() {
             val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
             if (inputData.isNotEmpty()) {
                 val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
-                bleController.writeData(dataToSend, (bleController.getConnectedDevices())[0]) // BLE로 데이터 전송
-                Toast.makeText(this, "Data Sent: $inputData", Toast.LENGTH_SHORT).show()
+                val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
+                Log.i(mainLogTag,"Data Sent: $inputData")
             } else {
-                Toast.makeText(this, "Please enter data to send", Toast.LENGTH_SHORT).show()
+                Log.i(mainLogTag,"Data Sent: $inputData")
             }
         }
 
         // ( 트리거 : APP )
         // 기기에 Info Request 를 해서 받는 Read Data
         btnRequestReadData.setOnClickListener {
-            bleController.requestReadData((bleController.getConnectedDevices())[0])
+            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+            bleController.requestReadData(macAddress.address)
         }
 
         // LiveData 관찰 설정
@@ -216,12 +220,9 @@ class MainActivity : AppCompatActivity() {
         btnConnect.setOnClickListener {
             val selectedDevice = scanListAdapter.getSelectedDevice()
             if (selectedDevice != null) {  // unknown Device 의 경우
-                Toast.makeText(this, "Selected: ${selectedDevice.name}", Toast.LENGTH_SHORT).show()
                 connectToDeviceWithPermissionCheck(selectedDevice)
                 // Connect 후 팝업창 종료 + Scan 종료
                 stopBleScanAndClearScanList()
-            } else {
-                Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show()
             }
         }
 
@@ -229,14 +230,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     // BLE Connect 권한 검사 메서드
+    @SuppressLint("MissingPermission")
     private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
         if(bleController.requestBlePermission(this)){
             // 블루투스 권한이 이미 있는 경우
             bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
-                    Log.i(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 성공")
+                    Log.i(mainLogTag, "${selectedDevice.name} 기기 연결 성공")
                 } else {
-                    Log.w(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 실패")
+                    Log.w(mainLogTag, "${selectedDevice.name} 기기 연결 실패")
                 }
             })
         }
@@ -252,15 +254,15 @@ class MainActivity : AppCompatActivity() {
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             when (requestCode) {
                 101 -> { // BLE 스캔 권한 요청 결과
-                    Log.i(MAIN_LOG_TAG, "블루투스 스캔 권한이 허용되었습니다.")
+                    Log.i(mainLogTag, "블루투스 스캔 권한이 허용되었습니다.")
                     bleController.permissionStatus.bluetoothScanPermission = true
                 }
                 102 -> { // 위치 권한 요청 결과
-                    Log.i(MAIN_LOG_TAG, "위치 권한이 허용되었습니다.")
+                    Log.i(mainLogTag, "위치 권한이 허용되었습니다.")
                     bleController.permissionStatus.locationPermission = true
                 }
                 103 -> { // BLE 연결 권한 요청 결과
-                    Log.i(MAIN_LOG_TAG, "블루투스 연결 권한이 허용되었습니다.")
+                    Log.i(mainLogTag, "블루투스 연결 권한이 허용되었습니다.")
                     bleController.permissionStatus.bluetoothConnectPermission = true
                 }
             }
@@ -268,19 +270,19 @@ class MainActivity : AppCompatActivity() {
             // 권한이 거부된 경우
             when (requestCode) {
                 101 -> {
-                    Log.e(MAIN_LOG_TAG, "블루투스 스캔 권한이 거부되었습니다.")
+                    Log.e(mainLogTag, "블루투스 스캔 권한이 거부되었습니다.")
                     bleController.permissionStatus.bluetoothScanPermission = false
-                    Toast.makeText(this, "블루투스 스캔 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "블루투스 스캔 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
                 102 -> {
-                    Log.e(MAIN_LOG_TAG, "위치 권한이 거부되었습니다.")
+                    Log.e(mainLogTag, "위치 권한이 거부되었습니다.")
                     bleController.permissionStatus.locationPermission = false
-                    Toast.makeText(this, "위치 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "위치 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
                 103 -> {
-                    Log.e(MAIN_LOG_TAG, "블루투스 연결 권한이 거부되었습니다.")
+                    Log.e(mainLogTag, "블루투스 연결 권한이 거부되었습니다.")
                     bleController.permissionStatus.bluetoothConnectPermission = false
-                    Toast.makeText(this, "블루투스 연결 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "블루투스 연결 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
         }
@@ -288,8 +290,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(MAIN_LOG_TAG, "onDestroy")
-        Toast.makeText(this, "onDestroy", Toast.LENGTH_SHORT).show()
+        Log.i(mainLogTag, "onDestroy")
         bleController.disconnectAllDevices()
         scanListAdapter.clearDevices()
         stopBleScanAndClearScanList()
@@ -298,25 +299,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        Log.i(MAIN_LOG_TAG, "onPause")
-//        Toast.makeText(this, "onPause", Toast.LENGTH_SHORT).show()
+        Log.i(mainLogTag, "onPause")
         stopBleScanAndClearScanList()
         isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
     }
 
     override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
         super.onResume()
-        Log.i(MAIN_LOG_TAG, "onResume")
-        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+        Log.i(mainLogTag, "onResume")
 
         if (toggleBtnAutoConnect.isChecked) {
             bleController.startBleScan(scanCallback)
-            val pairedDevices = bleController.getBondedDevices() ?: return
+            val pairedDevices = bleController.getPairedDevices() ?: return
 
             handler.postDelayed({
                 val scannedDevices = scanListAdapter.getDeviceList()
-                Log.i(MAIN_LOG_TAG, "pairedDevices  : ${pairedDevices}")
-                Log.i(MAIN_LOG_TAG, "scannedDevices : ${scannedDevices}")
+                Log.i(mainLogTag, "pairedDevices  : ${pairedDevices}")
+                Log.i(mainLogTag, "scannedDevices : ${scannedDevices}")
                 for (pairedDevice in pairedDevices) {
                     connectToDeviceWithPermissionCheck(pairedDevice)
                 }
@@ -333,14 +332,14 @@ class MainActivity : AppCompatActivity() {
             popupView.visibility = View.VISIBLE
             popupContainer.visibility = View.VISIBLE
         } catch (e: Exception) {
-            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
+            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
         }
     }
 
     private fun stopBleScanAndClearScanList() {
         try {
             bleController.stopBleScan(scanCallback)
-            Log.i(MAIN_LOG_TAG, "블루투스 스캔 정지 ")
+            Log.i(mainLogTag, "블루투스 스캔 정지 ")
             btnScanStart.visibility = View.VISIBLE // Scan Start 버튼 활성화
             btnParingCheck.visibility = View.VISIBLE
             toggleBtnAutoConnect.visibility = View.VISIBLE
@@ -348,7 +347,7 @@ class MainActivity : AppCompatActivity() {
             popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
             scanListAdapter.clearDevices()
         } catch (e: Exception) {
-            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
+            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
         }
     }
 
@@ -364,12 +363,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         override fun onScanFailed(errorCode: Int) {
-            Log.e(MAIN_LOG_TAG, "onScanFailed called with errorCode: $errorCode")
+            Log.e(mainLogTag, "onScanFailed called with errorCode: $errorCode")
             when (errorCode) {
-                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(MAIN_LOG_TAG, "Scan already started")
-                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
-                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
-                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
+                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(mainLogTag, "Scan already started")
+                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(mainLogTag, "App registration failed")
+                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(mainLogTag, "Internal error")
+                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(mainLogTag, "Feature unsupported")
             }
             Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
         }

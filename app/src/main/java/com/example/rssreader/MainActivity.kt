@@ -40,7 +40,7 @@ class MainActivity : ComponentActivity() {
         webView.clearCache(true)
         buttonSendData.setOnClickListener{
             // Web으로 데이터 전달 예제
-            sendDataToWebExample(
+            sendDataToWeb(
                 "key" to "value",
                 "key2" to "value2")
         }
@@ -72,7 +72,7 @@ class MainActivity : ComponentActivity() {
     /**
      * APP(client) -> Web(server) 데이터 전달
      */
-    private fun sendDataToWebExample(vararg pairs: Pair<String, Any?>) {
+    private fun sendDataToWeb(vararg pairs: Pair<String, Any?>) {
         /* 사용법 [ Map 처럼 생성해 JSON 생성 ]
         * sendDataToWebExample(
         *     "key" to "value",

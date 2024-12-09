@@ -36,6 +36,8 @@ class MainActivity : ComponentActivity() {
 //        val url = "https://www.naver.com"
         hybridAppBridge.loadUrl(url)
 
+        // 캐시가 남아 있으면
+        webView.clearCache(true)
         buttonSendData.setOnClickListener{
             // Web으로 데이터 전달 예제
             sendDataToWebExample(

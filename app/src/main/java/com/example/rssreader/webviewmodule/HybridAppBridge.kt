@@ -67,6 +67,7 @@ class HybridAppBridge(private val webView: WebView) {
         webView.post {
             // JSON 문자열을 안전하게 이스케이프 처리
             webView.evaluateJavascript("javascript:$jsFunctionName('$sendingDataToWeb')",
+                //                            javascript:#JS화살표 함수명#(#####함수 인자값#####)
                 { result ->
                     Log.d(BRIDGE_LOG_TAG, "Result from JavaScript: $result")
                 })

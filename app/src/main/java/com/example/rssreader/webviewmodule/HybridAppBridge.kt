@@ -12,6 +12,11 @@ import android.webkit.WebResourceResponse
 import android.widget.Toast
 import org.json.JSONObject
 
+data class DeviceInfo(
+    var macAddress: String = "",
+    var deviceName: String = ""
+)
+
 class HybridAppBridge(private val webView: WebView) {
 
     /**
@@ -75,15 +80,12 @@ class HybridAppBridge(private val webView: WebView) {
         }
     }
 
-    fun resConnect(vararg pairs: Pair<String, Any?>) {
-        // 필수 키 목록
-        val requiredKeys = setOf("macAddress", "deviceName")
-
+    fun resConnect(deviceInfo: DeviceInfo) {
         // JSON 객체 생성
-        val jsonObject = makeJsonMsgProcess(pairs, requiredKeys)
+        val jsonObject = makeJsonMsgProcess(deviceInfo)
 
-        // 함수 이름 명시적으로 정의
-        val functionName = "resConnect"
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
         webView.post {
@@ -96,41 +98,18 @@ class HybridAppBridge(private val webView: WebView) {
     }
 
     // JSON 객체 생성 로직
-    private fun makeJsonMsgProcess(
-        pairs: Array<out Pair<String, Any?>>,
-        requiredKeys: Set<String>
-    ): JSONObject {
+    private fun makeJsonMsgProcess(deviceInfo: DeviceInfo): JSONObject {
         val jsonObject = JSONObject()
 
-        // 전달받은 키-값 쌍을 JSON 객체에 추가
-        val keys = pairs.map { it.first }.toSet()
-        val missingKeys = mutableListOf<String>() // 누락된 키를 저장
-        val emptyValueKeys = mutableListOf<String>() // 값이 빈 문자열인 키를 저장
+        // DeviceInfo 데이터를 JSON 객체에 추가
+        jsonObject.put("macAddress", deviceInfo.macAddress)
+        jsonObject.put("deviceName", deviceInfo.deviceName)
 
-        // 전달받은 키-값 쌍을 JSON 객체에 추가
-        for ((key, value) in pairs) {
-            jsonObject.put(key, value)
+        // 값이 빈 문자열인 경우 로그 출력
+        val emptyValueKeys = mutableListOf<String>()
+        if (deviceInfo.macAddress.isEmpty()) emptyValueKeys.add("macAddress")
+        if (deviceInfo.deviceName.isEmpty()) emptyValueKeys.add("deviceName")
 
-            // 값이 빈 문자열인 경우 로그에 추가
-            if (value == "") {
-                emptyValueKeys.add(key)
-            }
-        }
-
-        // 누락된 필수 키를 확인하고, 빈 값으로 채움
-        for (key in requiredKeys) {
-            if (!keys.contains(key)) {
-                jsonObject.put(key, "") // 누락된 키는 빈 문자열로 채움
-                missingKeys.add(key) // 누락된 키를 기록
-            }
-        }
-
-        // 로그 출력: 누락된 키
-        if (missingKeys.isNotEmpty()) {
-            Log.w(BridgeLogTag, "해당 Key 값이 없음 >> $missingKeys")
-        }
-
-        // 로그 출력: 값이 빈 문자열인 키
         if (emptyValueKeys.isNotEmpty()) {
             Log.w(BridgeLogTag, "해당 key의 Value 값이 '' >> $emptyValueKeys")
         }

@@ -9,6 +9,7 @@ import android.widget.Button
 import com.example.rssreader.webviewmodule.HybridAppBridge
 import org.json.JSONObject
 import android.util.Log
+import com.example.rssreader.webviewmodule.DeviceInfo
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
@@ -41,8 +42,9 @@ class MainActivity : ComponentActivity() {
         buttonSendData.setOnClickListener{
             // Web으로 데이터 전달 예제
             hybridAppBridge.resConnect(
-                "macAddress" to "11:22:33:44:55",
-                "deviceName" to "DeviceName_1")
+                DeviceInfo(macAddress = "11:22:33:44:55",
+                    deviceName = "DEVICE_NAME")
+            )
         }
 //        buttonSendData.setOnClickListener{
 //            // Web으로 데이터 전달 예제

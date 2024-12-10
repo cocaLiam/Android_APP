@@ -32,8 +32,7 @@ class MainActivity : ComponentActivity() {
         hybridAppBridge.initializeWebView(this)
 
         // 특정 URL 로드
-        val url = "https://app.cocabot.com"
-//        val url = "https://www.naver.com"
+        val url = "http://192.168.45.160:3000"
         hybridAppBridge.loadUrl(url)
 
         // 캐시가 남아 있으면
@@ -42,8 +41,8 @@ class MainActivity : ComponentActivity() {
         buttonSendData.setOnClickListener{
             // Web으로 데이터 전달 예제
             hybridAppBridge.resConnect(
-                "macAddress" to "value",
-                "deviceName" to "value2")
+                "macAddress" to "11:22:33:44:55",
+                "deviceName" to "DeviceName_1")
         }
 //        buttonSendData.setOnClickListener{
 //            // Web으로 데이터 전달 예제

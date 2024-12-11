@@ -9,13 +9,17 @@ import android.widget.Button
 import com.example.rssreader.webviewmodule.HybridAppBridge
 import org.json.JSONObject
 import android.util.Log
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
 import com.example.rssreader.webviewmodule.DeviceInfo
+import com.example.rssreader.webviewmodule.DeviceList
+import com.example.rssreader.webviewmodule.ReadData
 
 class MainActivity : ComponentActivity() {
     private lateinit var webView: WebView
     private lateinit var hybridAppBridge: HybridAppBridge
     private lateinit var buttonSendData: Button
-    private val MAIN_LOG_TAG = " - MainActivity "
+    private val mainLogTag = " - MainActivity "
 
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -33,26 +37,58 @@ class MainActivity : ComponentActivity() {
         hybridAppBridge.initializeWebView(this)
 
         // 특정 URL 로드
-        val url = "http://192.168.45.160:3000"
+        val url = "http://192.168.45.246:3000"
         hybridAppBridge.loadUrl(url)
 
         // 캐시가 남아 있으면
         webView.clearCache(true)
 
-        buttonSendData.setOnClickListener{
-            // Web으로 데이터 전달 예제
-            hybridAppBridge.resConnect(
-                DeviceInfo(macAddress = "11:22:33:44:55",
-                    deviceName = "DEVICE_NAME")
-            )
-        }
-//        buttonSendData.setOnClickListener{
-//            // Web으로 데이터 전달 예제
-//            sendDataToWeb(
-//                "key" to "value",
-//                "key2" to "value2")
+//        // FrontEnd 디버깅 로그 출력
+//        webView.webChromeClient = object : WebChromeClient() {
+//            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+//                Log.d(mainLogTag, "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+//                return super.onConsoleMessage(consoleMessage)
+//            }
 //        }
 
+        buttonSendData.setOnClickListener{
+//             Web으로 데이터 전달 예제
+            hybridAppBridge.resConnect(
+                DeviceInfo(
+                    macAddress = "11:22:33:44:55",
+                    deviceName = "DEVICE_NAME"
+                )
+            )
+            hybridAppBridge.resParingInfo(
+                DeviceList(
+                    deviceList = mutableListOf(
+                        DeviceInfo(
+                            macAddress = "11:22:33:44:55",
+                            deviceName = "DEVICE_NAME_1"
+                        ),
+                        DeviceInfo(
+                            macAddress = "22:33:44:55:66",
+                            deviceName = "DEVICE_NAME_2"
+                        )
+                    )
+                )
+            )
+            hybridAppBridge.resReadData(
+                ReadData(
+                    deviceInfo = DeviceInfo(
+                        macAddress = "11:22:33:44:55",
+                        deviceName = "DEVICE_NAME"
+                    ),
+                    msg = mapOf("key_From_App" to "val_From_App")
+                )
+            )
+            hybridAppBridge.subObserveData(
+                    mapOf(
+                        "subObserveData key" to "val",
+                        "Any_Key_From_App" to "Any_Value_From_App"
+                    )
+            )
+        }
     }
 
     override fun onStart() {

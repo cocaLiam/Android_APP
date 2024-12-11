@@ -3,19 +3,43 @@ package com.example.rssreader.webviewmodule
 import android.content.Context
 import android.util.Log
 import android.webkit.JavascriptInterface
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.Toast
+import com.google.gson.Gson
+import org.json.JSONException
 import org.json.JSONObject
+
 
 data class DeviceInfo(
     var macAddress: String = "",
     var deviceName: String = ""
 )
+
+data class ReadData(
+    var deviceInfo: DeviceInfo,
+    var msg: Map<String, Any> // msg를 JSON 타입으로 변경
+)
+
+data class WriteData(
+    var deviceInfo: DeviceInfo,
+    var msg: Map<String, Any> // msg를 JSON 타입으로 변경
+)
+
+data class DeviceList(
+    val deviceList: MutableList<DeviceInfo>
+)
+
+data class JsonValidationResult(
+    val jsonObject: JSONObject,
+    val emptyValueKeys: List<String>,
+    val missingKeys: List<String>
+)
+
 
 class HybridAppBridge(private val webView: WebView) {
 
@@ -80,41 +104,168 @@ class HybridAppBridge(private val webView: WebView) {
         }
     }
 
-    fun resConnect(deviceInfo: DeviceInfo) {
+    fun resConnect(dataToSend: DeviceInfo) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
-        val jsonObject = makeJsonMsgProcess(deviceInfo)
+        val jsonObject = jsonValidationResult.jsonObject
 
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
         webView.post {
-            val jsonString = jsonObject.toString() // JSON 객체를 문자열로 변환
-            Log.d(BridgeLogTag, "Sending JSON to JS: $jsonString") // 디버깅 로그 추가
-            webView.evaluateJavascript("javascript:$functionName($jsonString)") { result ->
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(BridgeLogTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resParingInfo(dataToSend: DeviceList) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webView.post {
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonObject)")
+            { result ->
+                Log.d(BridgeLogTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resConnectedDevices(dataToSend: DeviceList) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webView.post {
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonObject)")
+            { result ->
+                Log.d(BridgeLogTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resRemoveParing(dataToSend: DeviceInfo) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webView.post {
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonObject)")
+            { result ->
+                Log.d(BridgeLogTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resReadData(dataToSend: ReadData) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webView.post {
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonObject)")
+            { result ->
+                Log.d(BridgeLogTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    // 이 Data 는 Key 와 Value 가 어떤식으로든 가기 때문에 키 검사나 검증 과정이 없음
+    fun subObserveData(dataToSend: Map<String,String>){
+        // Gson 객체 생성
+        val gson = Gson()
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webView.post {
+            // data class -> JSON 변환
+            val jsonString = gson.toJson(dataToSend)
+//
+//            // JSON 문자열을 다시 JSONObject로 변환
+//            val jsonObject = JSONObject(jsonString)
+//
+//            // gson 으로 Json 변환시, '"nameValuePairs" : JsonObject' 으로 변환함
+//            if (jsonObject.has("nameValuePairs")) {
+//                jsonString = jsonObject.getJSONObject("nameValuePairs").toString()
+//            }
+            Log.d(BridgeLogTag, "Call JS function: $functionName($jsonString)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName($jsonString)")
+            { result ->
                 Log.d(BridgeLogTag, "Result from JavaScript: $result")
             }
         }
     }
 
     // JSON 객체 생성 로직
-    private fun makeJsonMsgProcess(deviceInfo: DeviceInfo): JSONObject {
+    private fun makeJsonMsgProcess(dataToSend: Any): JsonValidationResult {
+        val gson = Gson()
         val jsonObject = JSONObject()
-
-        // DeviceInfo 데이터를 JSON 객체에 추가
-        jsonObject.put("macAddress", deviceInfo.macAddress)
-        jsonObject.put("deviceName", deviceInfo.deviceName)
-
-        // 값이 빈 문자열인 경우 로그 출력
         val emptyValueKeys = mutableListOf<String>()
-        if (deviceInfo.macAddress.isEmpty()) emptyValueKeys.add("macAddress")
-        if (deviceInfo.deviceName.isEmpty()) emptyValueKeys.add("deviceName")
+        val missingKeys = mutableListOf<String>()
 
-        if (emptyValueKeys.isNotEmpty()) {
-            Log.w(BridgeLogTag, "해당 key의 Value 값이 '' >> $emptyValueKeys")
+        try {
+            // data class -> JSON 문자열 변환
+            val jsonString = gson.toJson(dataToSend)
+
+            // JSON 문자열 -> JSONObject 변환
+            val tempJsonObject = JSONObject(jsonString)
+
+            // data class의 프로퍼티 가져오기 (Kotlin Reflection 사용)
+            val dataClassProperties = dataToSend::class.members
+                .filterIsInstance<kotlin.reflect.KProperty1<Any, *>>()
+                .map { it.name }
+
+            // 빈 값 검사 및 누락된 키 확인
+            val jsonKeys = tempJsonObject.keys().asSequence().toSet()
+            for (key in dataClassProperties) {
+                if (!jsonKeys.contains(key)) {
+                    missingKeys.add(key)
+                } else {
+                    val value = tempJsonObject.opt(key)
+                    if (value == null|| (value is String && value.isEmpty()) ||
+                        (value is Collection<*> && value.isEmpty()) ||
+                        (value is Map<*, *> && value.isEmpty())) {
+                        emptyValueKeys.add(key)
+                    }
+                }
+            }
+
+            // 최종적으로 JSON 객체 반환
+            for (key in tempJsonObject.keys()) {
+                jsonObject.put(key, tempJsonObject.get(key))
+            }
+        } catch (e: Exception) {
+            throw IllegalArgumentException("JSON 변환 중 오류 발생: ${e.message}", e)
         }
 
-        return jsonObject
+        // 결과 반환
+        return JsonValidationResult(jsonObject, emptyValueKeys, missingKeys)
     }
 
     /**
@@ -125,15 +276,53 @@ class HybridAppBridge(private val webView: WebView) {
     class WebAppInterface(private val context: Context) {
         private val BridgeLogTag = " - HybridAppBridge"
         @JavascriptInterface
-        fun andShowToast(message: String) {
+        fun logMessage(message: String) {
+            // Web에서 전달받은 메시지를 로그로 출력
+            Log.d(BridgeLogTag, message)
+        }
+
+        @JavascriptInterface
+        fun pubToasting(message: String) {
             // Web에서 전달받은 메시지를 Toast로 표시
             Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
         }
 
         @JavascriptInterface
-        fun logMessage(message: String) {
+        fun pubDisconnectAllDevice() {
+            // Web에서 전달받은 메시지를 Toast로 표시
+            Log.i(BridgeLogTag,"pubDisconnectAllDevice CALL")
+        }
+
+        @JavascriptInterface
+        fun pubSendData(dataFromWeb:String) {
+            try {
+                // 전달된 JSON 문자열을 로그로 출력
+                Log.d(BridgeLogTag, "Received data: $dataFromWeb")
+
+                // Gson 객체 생성
+                val gson = Gson()
+
+                // JSON 문자열을 WriteData 객체로 변환
+                val writeData: WriteData = gson.fromJson(dataFromWeb, WriteData::class.java)
+                Log.d(BridgeLogTag, "Changed data: $writeData")
+
+                // WriteData 객체의 데이터 접근
+                Log.d(BridgeLogTag, "DeviceInfo - MAC Address: ${writeData.deviceInfo.macAddress}")
+                Log.d(BridgeLogTag, "DeviceInfo - Device Name: ${writeData.deviceInfo.deviceName}")
+                Log.d(BridgeLogTag, "Message 1: ${writeData.msg}")
+                Log.d(BridgeLogTag, "Message 2: ${writeData.msg.keys}")
+                Log.d(BridgeLogTag, "Message 3: ${writeData.msg.values}")
+                Log.d(BridgeLogTag, "Message 4: ${writeData.msg[writeData.msg.keys.firstOrNull()]}")
+
+                // 필요 시 JSONObject로 변환
+                val jsonObject = JSONObject(dataFromWeb)
+                Log.d(BridgeLogTag, "JSONObject: $jsonObject")
+            } catch (e: JSONException) {
+                e.printStackTrace()
+                Log.e(BridgeLogTag, "Failed to parse JSON: " + e.message)
+            }
             // Web에서 전달받은 메시지를 로그로 출력
-            Log.d(BridgeLogTag, message)
+            Log.d(BridgeLogTag, "pubSendData CALL , dataFromWeb : $dataFromWeb")
         }
     }
 

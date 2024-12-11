@@ -2,8 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-
-
     <!-- 이전 기기에서 레거시 Bluetooth 권한 요청 -->
     <!--    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />-->
     <!--    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />-->
@@ -38,7 +36,8 @@
     <!--    앱에 저전력 블루투스를 사용하는 경우-->
     <uses-feature android:name="android.hardware.bluetooth_le" android:required="true"/>
 
-
+    <!-- 인터넷 사용 권한 추가 [WebView] -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <application
         android:allowBackup="true"

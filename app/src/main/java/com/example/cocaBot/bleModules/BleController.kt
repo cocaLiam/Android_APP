@@ -60,6 +60,8 @@ class BleController(private val applicationContext: Context) {
     private lateinit var bluetoothManager: BluetoothManager
     private lateinit var bluetoothAdapter: BluetoothAdapter
     private lateinit var bluetoothLeScanner: BluetoothLeScanner
+    private lateinit var scanCallback:ScanCallback
+    private lateinit var popupContainer:LinearLayout
 
     // 수신 데이터를 LiveData로 관리
     private var _readData = MutableLiveData<Any>() // 내부에서만 수정 가능
@@ -174,25 +176,33 @@ class BleController(private val applicationContext: Context) {
         return hasBluetoothConnectPermission()
     }
 
+    fun registerScanCallback(mainScanCallback: ScanCallback){
+        scanCallback = mainScanCallback
+    }
+
+    fun registerPopupContainer(mainPopupContainer: LinearLayout){
+        popupContainer = mainPopupContainer
+    }
+
     /**
      * BLE Scan 창 팝업
      */
-    fun <T> bleScanPopup(scanCallback: ScanCallback, popupContainer: T) {
-        startBleScan(scanCallback)
+    fun bleScanPopup() {
+        startBleScan()
 
         // 10초 후 스캔 중지
         Log.i(logTagBleController, "스캔 타임아웃 제한시간 : ${scanPeriod / 1000}초 ")
         when (popupContainer) {
             is LinearLayout -> {  // 특정 팝업창에 Text로 UI 표현하는 경우
                 popupContainer.postDelayed({
-                    stopBleScan(scanCallback)
+                    stopBleScan()
                 }, scanPeriod)
             }
 
             is Handler -> {  // 일반 화면에 Text로 UI 표현하는 경우
                 popupContainer.postDelayed({ // SCAN_PERIOD 시간후에 발동되는 지연 함수
                     Log.w(logTagBleController, "--스캔 타임아웃-- ")
-                    stopBleScan(scanCallback)
+                    stopBleScan()
                 }, scanPeriod)
             }
         }
@@ -201,7 +211,7 @@ class BleController(private val applicationContext: Context) {
     /**
      * BLE 스캔 시작
      */
-    fun startBleScan(scanCallback: ScanCallback) {
+    fun startBleScan() {
         try {
             if (hasBluetoothConnectPermission()) {
                 bluetoothLeScanner.startScan(scanCallback)
@@ -215,7 +225,7 @@ class BleController(private val applicationContext: Context) {
     /**
      * BLE 스캔 중지
      */
-    fun stopBleScan(scanCallback: ScanCallback) {
+    fun stopBleScan() {
         try {
             if (hasBluetoothConnectPermission()) {
                 bluetoothLeScanner.stopScan(scanCallback)
@@ -471,7 +481,7 @@ class BleController(private val applicationContext: Context) {
     /**
      * 페어링된 기기 목록 가져오기
      */
-    fun getPairedDevices(): Set<BluetoothDevice>? {
+    fun getParingDevices(): Set<BluetoothDevice>? {
         if(!::bluetoothAdapter.isInitialized){
             return null
         }

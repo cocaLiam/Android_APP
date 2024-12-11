@@ -1,112 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/root_layout"
+    android:orientation="vertical"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#FFFFFF">
+    android:layout_height="match_parent">
 
-    <!-- Scan Start 버튼 -->
-    <Button
-        android:id="@+id/btn_scan_start"
-        android:layout_width="wrap_content"
+    <!-- 상단에 공간을 차지할 TextView와 Button을 포함한 LinearLayout -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="50dp"
-        android:text="Scan Start"
-        android:background="@android:color/holo_blue_light"
-        android:textColor="@android:color/white"
-        android:padding="10dp"
-        android:textSize="16sp" />
+        android:padding="16dp">
 
-    <!-- Paring Check 버튼 -->
-    <Button
-        android:id="@+id/btn_paring_check"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_toEndOf="@id/btn_scan_start"
-        android:layout_marginStart="16dp"
-        android:layout_alignTop="@id/btn_scan_start"
-        android:text="Paring check"
-        android:background="@android:color/holo_blue_light"
-        android:textColor="@android:color/white"
-        android:padding="10dp"
-        android:textSize="16sp" />
+        <!-- TextView -->
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="APP"
+            android:textSize="18sp"
+            android:gravity="center_vertical" />
 
-    <!-- 데이터 입력창 -->
-    <EditText
-        android:id="@+id/et_input_data"
-        android:layout_width="240dp"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/btn_scan_start"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp"
-        android:hint="Enter data to send" />
+        <!-- Button -->
+        <Button
+            android:id="@+id/buttonSendData"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Debuging Button" />
+    </LinearLayout>
 
-    <!-- 데이터 전송 버튼 -->
-    <Button
-        android:id="@+id/btn_send_data"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_alignTop="@id/et_input_data"
-        android:layout_toEndOf="@id/et_input_data"
-        android:layout_marginStart="8dp"
-        android:text="Send Data" />
-
-    <!-- [ 기기로 부터 info 요청 ] Read Data Request 버튼 -->
-    <Button
-        android:id="@+id/btn_request_read_data"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/et_input_data"
-        android:layout_centerHorizontal="true"
-        android:layout_marginTop="20dp"
-        android:text="Request Read Data" />
-
-    <!-- [ Notification 읽기 ] 데이터 수신 출력창 -->
-    <EditText
-        android:id="@+id/et_output_data"
-        android:layout_width="379dp"
-        android:layout_height="226dp"
-        android:layout_below="@id/btn_request_read_data"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="16dp"
-        android:background="@android:color/darker_gray"
-        android:enabled="false"
-        android:focusable="false"
-        android:hint="수신 데이터 출력창"
-        android:textSize="16sp" />
-
-    <!-- Disconnect 버튼 -->
-    <Button
-        android:id="@+id/btn_disconnect"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/et_output_data"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="16dp"
-        android:layout_alignParentEnd="true"
-        android:text="Disconnect"
-        android:background="@android:color/holo_red_light"
-        android:textColor="@android:color/white"
-        android:padding="10dp"
-        android:textSize="16sp" />
-
-    <!-- 자동 연결 모드 ON 토글 -->
-    <ToggleButton
-        android:id="@+id/toggle_auto_connect"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/et_output_data"
-        android:layout_marginTop="20dp"
-        android:layout_marginStart="16dp"
-        android:layout_alignParentStart="true"
-        android:textOn="자동 연결 모드 ON"
-        android:textOff="자동 연결 모드 OFF"
-        android:background="@android:color/holo_green_light"
-        android:textColor="@android:color/white"
-        android:padding="10dp"
-        android:textSize="16sp" />
-
-</RelativeLayout>
+    <!-- WebView의 높이를 조정하여 전체를 차지하지 않도록 설정 -->
+    <WebView
+        android:id="@+id/webView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

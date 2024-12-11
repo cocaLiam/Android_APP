@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.enableEdgeToEdge
 
 // UI Pack
 import androidx.recyclerview.widget.RecyclerView
@@ -24,7 +25,16 @@ import android.content.Intent
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 
+// WebView Pack
+import android.webkit.WebView
+import android.webkit.ConsoleMessage
+import android.webkit.WebChromeClient
+
 // dataType Pack
+import com.example.cocaBot.webViewModules.DeviceInfo
+import com.example.cocaBot.webViewModules.DeviceList
+import com.example.cocaBot.webViewModules.ReadData
+import org.json.JSONObject
 
 // Util Pack
 import android.util.Log
@@ -38,41 +48,40 @@ import androidx.lifecycle.Observer
 // Custom Package
 import com.example.cocaBot.bleModules.ScanListAdapter
 import com.example.cocaBot.bleModules.BleController
+import com.example.cocaBot.webViewModules.HybridAppBridge
+
 
 class MainActivity : AppCompatActivity() {
-    // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
+    // BLE 관련 변수들
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
-    private val bleController = BleController(this) // MainActivity는 Context를 상속받음
+    private lateinit var bleController: BleController
+
+    // WebView 관련 변수들
+    private lateinit var webView: WebView
+    private lateinit var hybridAppBridge: HybridAppBridge
+
+    // UI 관련 변수들
     private val handler = Handler(Looper.getMainLooper())
-
-    private var scanListAdapter: ScanListAdapter = ScanListAdapter()
-    private var isPopupVisible = false
-
-    private val mainLogTag = " - MainActivity "
-
-    // View 변수 선언
-    private lateinit var btnScanStart: Button
-    private lateinit var btnParingCheck: Button
-    private lateinit var btnDisconnect : Button
-    private lateinit var toggleBtnAutoConnect : ToggleButton
-    private lateinit var sharedPreferences: SharedPreferences
+    private lateinit var buttonSendData: Button
+    // 팝업 UI 관련 변수들
     private lateinit var btnConnect: Button
     private lateinit var btnClose: Button
     private lateinit var popupContainer: LinearLayout
     private lateinit var recyclerScanList: RecyclerView
     private lateinit var popupView: View
-    // Data Send, receive Button 및 Text 입력창
-    private lateinit var etInputData: EditText
-    private lateinit var etOutputData: EditText
-    private lateinit var btnSendData: Button
-    private lateinit var btnRequestReadData: Button
+    private var scanListAdapter: ScanListAdapter = ScanListAdapter()
+
+    private val mainLogTag = " - MainActivity "
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+//        enableEdgeToEdge()
 
         setContentView(R.layout.activity_main)
 
-// BLE 초기화 완료 -----------------------------------------------------------------------------------
+// BLE 초기화 ---------------------------------------------------------------------------------------
+        bleController = BleController(this) // MainActivity는 Context를 상속받음
+
         // 1. BluetoothManager 및 BluetoothAdapter 초기화
         bleController.setBleModules()
 
@@ -93,20 +102,38 @@ class MainActivity : AppCompatActivity() {
 
         // 3. BLE 지원 여부 확인
         bleController.checkBleOperator()
+// BLE 초기화 ---------------------------------------------------------------------------------------
 
-// BLE 초기화 완료 -----------------------------------------------------------------------------------
+// WebView 초기화 -----------------------------------------------------------------------------------
+        webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
 
-// UI 초기화 완료 ------------------------------------------------------------------------------------
-        // activity_main.xml의 View 초기화
-        btnScanStart = findViewById(R.id.btn_scan_start)
-        btnParingCheck = findViewById(R.id.btn_paring_check)
-        btnDisconnect  = findViewById(R.id.btn_disconnect)
-        toggleBtnAutoConnect = findViewById(R.id.toggle_auto_connect)
-        sharedPreferences = getSharedPreferences("ToggleStatusStorage", MODE_PRIVATE)
+        hybridAppBridge = HybridAppBridge(webView, bleController)
 
+        // WebView 설정
+        hybridAppBridge.initializeWebView(this)
+
+        // 특정 URL 로드
+        val url = "http://192.168.45.246:3000"
+        hybridAppBridge.loadUrl(url)
+
+        // 캐시가 남아 있으면
+        webView.clearCache(true)
+        webView.clearHistory()
+
+//        // FrontEnd 디버깅 로그 출력
+//        webView.webChromeClient = object : WebChromeClient() {
+//            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+//                Log.d(mainLogTag, "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+//                return super.onConsoleMessage(consoleMessage)
+//            }
+//        }
+
+// WebView 초기화 -----------------------------------------------------------------------------------
+
+// UI 초기화 ---------------------------------------------------------------------------------------
         // activity_main.xml의 루트 레이아웃 가져오기
         val rootLayout =
-            findViewById<RelativeLayout>(R.id.root_layout) // activity_main.xml의 루트 레이아웃 ID
+            findViewById<LinearLayout>(R.id.root_layout) // activity_main.xml의 루트 레이아웃 ID
 
         // popup_scan_list.xml을 inflate
         popupView = LayoutInflater.from(this)
@@ -122,94 +149,92 @@ class MainActivity : AppCompatActivity() {
         popupContainer = popupView.findViewById(R.id.popup_container)
         recyclerScanList = popupView.findViewById(R.id.recycler_scan_list)
 
-        // 데이터 입력창 및 버튼 초기화
-        btnSendData = findViewById(R.id.btn_send_data)
-        etInputData = findViewById(R.id.et_input_data)
-        btnRequestReadData = findViewById(R.id.btn_request_read_data)
-        etOutputData = findViewById(R.id.et_output_data)
-
         // RecyclerView 초기화
         scanListAdapter.setupRecyclerView(recyclerScanList, this@MainActivity)
 
+        buttonSendData = findViewById(R.id.buttonSendData)
+
         // 팝업을 루트 레이아웃에 추가
         rootLayout.addView(popupView)
-
+        bleController.registerScanCallback(scanCallback)
+        bleController.registerPopupContainer(popupContainer)
         bleController.requestBlePermission(this)
-        // Scan Start 버튼 클릭 리스너
-        btnScanStart.setOnClickListener {
-            if(bleController.requestBlePermission(this)){
-                // 권한이 허용된 경우에만 BLE 스캔 시작
-                startBleScan()
-            }
+
+        buttonSendData.setOnClickListener {
         }
-
-        // Paring check 버튼 클릭 리스너
-        btnParingCheck.setOnClickListener {
-            val bondedDevices: Set<BluetoothDevice>? = bleController.getPairedDevices()
-            Log.i(mainLogTag, "bondedDevices : $bondedDevices")
-            Log.i(mainLogTag, "getConnectedDevices : ${bleController.getConnectedDevices()}")
-            if (bondedDevices == null){
-                bleController.updateReadData("")
-            }else{
-                bleController.updateReadData("페어링된 기기 리스트 : ${bondedDevices} \n" +
-                        "현재 연결된 기기 리스트 : ${bleController.getConnectedDevices()}")
-            }
-        }
-
-        // Disconnect 버튼 클릭 리스너
-        btnDisconnect.setOnClickListener{
-            bleController.disconnectAllDevices()
-        }
-
-        // 저장된 상태 불러오기
-        val toggleState = sharedPreferences.getBoolean("toggleAccessKey", false)
-        toggleBtnAutoConnect.isChecked = toggleState
-        // ToggleButton의 상태 변경 리스너 설정
-        toggleBtnAutoConnect.setOnCheckedChangeListener { _, isChecked ->
-            // 상태 저장
-            with(sharedPreferences.edit()) {
-                putBoolean("toggleAccessKey", isChecked)
-                apply()
-            }
-
-            if (isChecked) {
-                // ToggleButton이 ON 상태일 때 실행할 코드
-                Log.i(mainLogTag,"자동 연결 모드 ON")
-            } else {
-                // ToggleButton이 OFF 상태일 때 실행할 코드
-                Log.i(mainLogTag,"자동 연결 모드 OFF")
-            }
-        }
-
-        // 데이터 전송 버튼 클릭 리스너
-        btnSendData.setOnClickListener {
-            val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
-            if (inputData.isNotEmpty()) {
-                val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
-                val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
-                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
-                Log.i(mainLogTag,"Data Sent: $inputData")
-            } else {
-                Log.i(mainLogTag,"Data Sent: $inputData")
-            }
-        }
-
-        // ( 트리거 : APP )
-        // 기기에 Info Request 를 해서 받는 Read Data
-        btnRequestReadData.setOnClickListener {
-            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
-            bleController.requestReadData(macAddress.address)
-        }
-
-        // LiveData 관찰 설정
-        bleController.readData.observe(this, Observer { newData ->
-            // 데이터가 변경되면 UI 업데이트
-            if ( newData is String){
-                etOutputData.setText(newData)
-            }else{
-                etOutputData.setText(newData.toString())
-            }
-        })
+//        // Scan Start 버튼 클릭 리스너
+//        btnScanStart.setOnClickListener {
+//            if(bleController.requestBlePermission(this)){
+//                // 권한이 허용된 경우에만 BLE 스캔 시작
+//                startBleScan()
+//            }
+//        }
+//
+//        // Paring check 버튼 클릭 리스너
+//        btnParingCheck.setOnClickListener {
+//            val bondedDevices: Set<BluetoothDevice>? = bleController.getParingDevices()
+//            Log.i(mainLogTag, "bondedDevices : $bondedDevices")
+//            Log.i(mainLogTag, "getConnectedDevices : ${bleController.getConnectedDevices()}")
+//            if (bondedDevices == null){
+//                bleController.updateReadData("")
+//            }else{
+//                bleController.updateReadData("페어링된 기기 리스트 : ${bondedDevices} \n" +
+//                        "현재 연결된 기기 리스트 : ${bleController.getConnectedDevices()}")
+//            }
+//        }
+//
+//        // Disconnect 버튼 클릭 리스너
+//        btnDisconnect.setOnClickListener {
+//            bleController.disconnectAllDevices()
+//        }
+//
+//        toggleBtnAutoConnect.isChecked = toggleState
+//        // ToggleButton의 상태 변경 리스너 설정
+//        toggleBtnAutoConnect.setOnCheckedChangeListener { _, isChecked ->
+//            // 상태 저장
+//            with(sharedPreferences.edit()) {
+//                putBoolean("toggleAccessKey", isChecked)
+//                apply()
+//            }
+//
+//            if (isChecked) {
+//                // ToggleButton이 ON 상태일 때 실행할 코드
+//                Log.i(mainLogTag,"자동 연결 모드 ON")
+//            } else {
+//                // ToggleButton이 OFF 상태일 때 실행할 코드
+//                Log.i(mainLogTag,"자동 연결 모드 OFF")
+//            }
+//        }
+//
+//        // 데이터 전송 버튼 클릭 리스너
+//        btnSendData.setOnClickListener {
+//            val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
+//            if (inputData.isNotEmpty()) {
+//                val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
+//                val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+//                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
+//                Log.i(mainLogTag,"Data Sent: $inputData")
+//            } else {
+//                Log.i(mainLogTag,"Data Sent: $inputData")
+//            }
+//        }
+//
+//        // ( 트리거 : APP )
+//        // 기기에 Info Request 를 해서 받는 Read Data
+//        btnRequestReadData.setOnClickListener {
+//            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+//            bleController.requestReadData(macAddress.address)
+//        }
+//
+//        // LiveData 관찰 설정
+//        bleController.readData.observe(this, Observer { newData ->
+//            // 데이터가 변경되면 UI 업데이트
+//            if ( newData is String){
+//                etOutputData.setText(newData)
+//            }else{
+//                etOutputData.setText(newData.toString())
+//            }
+//        })
 
         // Close 버튼 클릭 리스너
         btnClose.setOnClickListener {
@@ -226,7 +251,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-// UI 초기화 완료 ------------------------------------------------------------------------------------
+// UI 초기화 ---------------------------------------------------------------------------------------
     }
 
     // BLE Connect 권한 검사 메서드
@@ -294,23 +319,23 @@ class MainActivity : AppCompatActivity() {
         bleController.disconnectAllDevices()
         scanListAdapter.clearDevices()
         stopBleScanAndClearScanList()
-        isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
+        popupView.visibility = View.GONE
     }
 
     override fun onPause() {
         super.onPause()
         Log.i(mainLogTag, "onPause")
         stopBleScanAndClearScanList()
-        isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
+        popupView.visibility = View.GONE
     }
 
-    override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
+    override fun onResume() {
         super.onResume()
         Log.i(mainLogTag, "onResume")
 
-        if (toggleBtnAutoConnect.isChecked) {
-            bleController.startBleScan(scanCallback)
-            val pairedDevices = bleController.getPairedDevices() ?: return
+        if (false) {  // TODO: 어느 조건일 때 자동으로 페어링 시킬지 고민해봐야함
+            bleController.startBleScan()
+            val pairedDevices = bleController.getParingDevices() ?: return
 
             handler.postDelayed({
                 val scannedDevices = scanListAdapter.getDeviceList()
@@ -323,12 +348,20 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 뒤로가기 버튼 처리
+     */
+    override fun onBackPressed() {
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+        }
+    }
+
     private fun startBleScan() {
         try {
-            bleController.bleScanPopup(scanCallback, popupContainer)
-            btnScanStart.visibility = View.GONE
-            btnParingCheck.visibility = View.GONE
-            toggleBtnAutoConnect.visibility = View.GONE
+            bleController.bleScanPopup()
             popupView.visibility = View.VISIBLE
             popupContainer.visibility = View.VISIBLE
         } catch (e: Exception) {
@@ -338,11 +371,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun stopBleScanAndClearScanList() {
         try {
-            bleController.stopBleScan(scanCallback)
+            bleController.stopBleScan()
             Log.i(mainLogTag, "블루투스 스캔 정지 ")
-            btnScanStart.visibility = View.VISIBLE // Scan Start 버튼 활성화
-            btnParingCheck.visibility = View.VISIBLE
-            toggleBtnAutoConnect.visibility = View.VISIBLE
             popupView.visibility = View.GONE // 팝업 숨김
             popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
             scanListAdapter.clearDevices()

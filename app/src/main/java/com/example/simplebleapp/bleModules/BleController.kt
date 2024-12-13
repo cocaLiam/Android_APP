@@ -36,6 +36,7 @@ import java.lang.reflect.Method
 
 // Util Pack
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 // Custom Package
 
@@ -93,7 +94,7 @@ class BleController(private val applicationContext: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
-    private var bluetoothGattMap: MutableMap<String, BleDeviceInfo> = mutableMapOf()
+    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
 
     /**
      * BLE 모듈 초기화
@@ -233,8 +234,10 @@ class BleController(private val applicationContext: Context) {
             return
         }
         try {
+            Log.i(logTagBleController, "device.bondState : ${device.bondState}")
             if (device.bondState == BluetoothDevice.BOND_NONE) {
                 device.createBond() // 페어링 시도
+                Log.i(logTagBleController, "페어링 시도 요청 : ${device.bondState}")
             }
             // GATT 서버에 연결 시도
             device.connectGatt(applicationContext, false, object : BluetoothGattCallback() {
@@ -429,8 +432,8 @@ class BleController(private val applicationContext: Context) {
      */
     fun writeData(data: ByteArray, macAddress: String ) {
         try {
-            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: return
-            bleInfo.gatt ?: return
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw Exception("BleDeviceInfo 객체가 초기화되지 않았습니다.: $macAddress")
+            bleInfo.gatt ?: throw Exception("BluetoothGatt 객체가 초기화되지 않았습니다: $macAddress")
 
             if (hasBluetoothConnectPermission()) {
                 try {
@@ -462,8 +465,8 @@ class BleController(private val applicationContext: Context) {
      */
     fun requestReadData(macAddress: String) {
         try {
-            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: return
-            bleInfo.gatt ?: return
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw SecurityException("BleDeviceInfo 객체가 초기화되지 않았습니다.: $macAddress")
+            bleInfo.gatt ?: throw SecurityException("BluetoothGatt 객체가 초기화되지 않았습니다: $macAddress")
 
             if (hasBluetoothConnectPermission()) {
                 try {
@@ -534,23 +537,19 @@ class BleController(private val applicationContext: Context) {
      */
     fun disconnectAllDevices() {
         Log.i(logTagBleController, "모든 기기 연결 해제 시도 : $bluetoothGattMap")
-        useToastOnSubThread("모든 기기 연결 해제 시도 : $bluetoothGattMap")
 
-        val iterator = bluetoothGattMap.entries.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            val device = entry.key
-            val deviceInfo:BleDeviceInfo = entry.value
-
+        for ((key, deviceInfo) in bluetoothGattMap) {
             if (hasBluetoothConnectPermission()) {
                 try {
+                    Log.i(logTagBleController, "Disconnect 시도 : ${deviceInfo.deviceName}")
                     deviceInfo.gatt?.disconnect()
                     deviceInfo.gatt?.close()
-                    iterator.remove() // Iterator의 remove() 메서드를 사용하여 안전하게 제거
+                    Log.i(logTagBleController, "Disconnect 완료 : ${deviceInfo.device?.address}")
+                    bluetoothGattMap.remove(key) // 안전하게 제거
                 } catch (e: SecurityException) {
                     Log.e(
                         logTagBleController, "disconnectAllDevices Failed ${e.message}" +
-                                "해제 실패 : $device"
+                                "해제 실패 : $key"
                     )
                 }
             }

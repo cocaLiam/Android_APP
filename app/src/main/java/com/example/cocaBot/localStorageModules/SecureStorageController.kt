@@ -1,10 +1,12 @@
 package com.example.cocaBot.localStorageModules
 
+// Android 기본 패키지
 import android.content.Context
 
-// 암호화
+// 보안 패키지
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
+
 
 // 로컬 저장소 로그인 기능 << TODO: 자동로그인 사용여부 결정 필요
 class SecureStorageController(context: Context) {

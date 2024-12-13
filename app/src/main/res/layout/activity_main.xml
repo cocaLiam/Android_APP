@@ -23,7 +23,7 @@
 
         <!-- Button -->
         <Button
-            android:id="@+id/buttonSendData"
+            android:id="@+id/debuggingButton"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Debuging Button" />

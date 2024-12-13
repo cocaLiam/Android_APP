@@ -1,15 +1,28 @@
 package com.example.cocaBot.bleModules
-
-import android.bluetooth.BluetoothDevice
+// Android 기본 패키지
 import android.content.Context
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+
+// UI Pack
 import android.widget.RadioButton
 import android.widget.TextView
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+
+// BLE Pack
+import android.bluetooth.BluetoothDevice
+
+// WebView Pack
+
+// DataClass Pack
+
+// Util Pack
+
+// Custom Package
 import com.example.cocaBot.R
+
 
 class ScanListAdapter() :
     RecyclerView.Adapter<ScanListAdapter.ScanViewHolder>() {
@@ -69,10 +82,10 @@ class ScanListAdapter() :
     /* RecyclerView를 초기화하는 메서드 */
     fun setupRecyclerView(
         recyclerScanList: RecyclerView,
-        mainActivityContext: Context
+        context: Context
     ) {
         // RecyclerView의 레이아웃 매니저를 설정 (세로 방향 리스트 형태)
-        recyclerScanList.layoutManager = LinearLayoutManager(mainActivityContext)
+        recyclerScanList.layoutManager = LinearLayoutManager(context)
         // recyclerScanList 자체에서 데이터를 직접 관리 X
         // 그래서 데이터를 관리하고 화면에 표시하는 역할의 어댑터를 직접 넣어줘야함
         recyclerScanList.adapter = this

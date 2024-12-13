@@ -2,7 +2,6 @@ package com.example.cocaBot
 
 // Operator Pack
 import android.annotation.SuppressLint
-import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
@@ -16,39 +15,36 @@ import android.view.LayoutInflater
 import android.view.View
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.RelativeLayout
 import android.widget.Toast
-import android.content.SharedPreferences
 import android.content.Intent
 
 // BLE Pack
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import com.example.cocaBot.bleModules.ScanListAdapter
+import com.example.cocaBot.bleModules.BleController
 
 // WebView Pack
 import android.webkit.WebView
-import android.webkit.ConsoleMessage
-import android.webkit.WebChromeClient
+import com.example.cocaBot.webViewModules.HybridAppBridge
+import com.example.cocaBot.webViewModules.WebAppInterface
 
 // dataType Pack
 import com.example.cocaBot.webViewModules.DeviceInfo
 import com.example.cocaBot.webViewModules.DeviceList
 import com.example.cocaBot.webViewModules.ReadData
+import com.example.cocaBot.webViewModules.WriteData
+import com.example.cocaBot.webViewModules.JsonValidationResult
 import org.json.JSONObject
 
 // Util Pack
-import android.util.Log
-import android.widget.EditText
-import android.widget.ToggleButton
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.Observer
+import android.util.Log
 
-// Custom Package
-import com.example.cocaBot.bleModules.ScanListAdapter
-import com.example.cocaBot.bleModules.BleController
-import com.example.cocaBot.webViewModules.HybridAppBridge
 
 
 class MainActivity : AppCompatActivity() {
@@ -59,10 +55,11 @@ class MainActivity : AppCompatActivity() {
     // WebView 관련 변수들
     private lateinit var webView: WebView
     private lateinit var hybridAppBridge: HybridAppBridge
+    private lateinit var webAppInterface: WebAppInterface
 
     // UI 관련 변수들
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var buttonSendData: Button
+    private lateinit var debuggingButton: Button
     // 팝업 UI 관련 변수들
     private lateinit var btnConnect: Button
     private lateinit var btnClose: Button
@@ -75,7 +72,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-//        enableEdgeToEdge()
+        enableEdgeToEdge()
 
         setContentView(R.layout.activity_main)
 
@@ -107,13 +104,14 @@ class MainActivity : AppCompatActivity() {
 // WebView 초기화 -----------------------------------------------------------------------------------
         webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
 
-        hybridAppBridge = HybridAppBridge(webView, bleController)
+        hybridAppBridge = HybridAppBridge(webView, bleController, this@MainActivity)
+        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
 
         // WebView 설정
-        hybridAppBridge.initializeWebView(this)
+        hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.246:3000"
+        val url = "http://192.168.45.178:3000"
         hybridAppBridge.loadUrl(url)
 
         // 캐시가 남아 있으면
@@ -150,27 +148,37 @@ class MainActivity : AppCompatActivity() {
         recyclerScanList = popupView.findViewById(R.id.recycler_scan_list)
 
         // RecyclerView 초기화
-        scanListAdapter.setupRecyclerView(recyclerScanList, this@MainActivity)
+        scanListAdapter.setupRecyclerView(recyclerScanList, this)
 
-        buttonSendData = findViewById(R.id.buttonSendData)
+        debuggingButton = findViewById(R.id.debuggingButton)
 
         // 팝업을 루트 레이아웃에 추가
         rootLayout.addView(popupView)
         bleController.registerScanCallback(scanCallback)
         bleController.registerPopupContainer(popupContainer)
-        bleController.requestBlePermission(this)
+        bleController.requestBlePermission(this@MainActivity)
 
-        buttonSendData.setOnClickListener {
+        debuggingButton.setOnClickListener {
+            startBleScan()
+            webAppInterface.subObserveData(mapOf("aa" to "bb"))
         }
-//        // Scan Start 버튼 클릭 리스너
+//        // reqConnect
 //        btnScanStart.setOnClickListener {
 //            if(bleController.requestBlePermission(this)){
 //                // 권한이 허용된 경우에만 BLE 스캔 시작
 //                startBleScan()
+//                connectToDeviceWithPermissionCheck(DeviceInfo)
 //            }
 //        }
 //
-//        // Paring check 버튼 클릭 리스너
+//        // ( 트리거 : APP )
+//        // reqReadData
+//        btnRequestReadData.setOnClickListener {
+//            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+//            bleController.requestReadData(macAddress.address)
+//        }
+//
+//        // reqParingInfo
 //        btnParingCheck.setOnClickListener {
 //            val bondedDevices: Set<BluetoothDevice>? = bleController.getParingDevices()
 //            Log.i(mainLogTag, "bondedDevices : $bondedDevices")
@@ -183,30 +191,16 @@ class MainActivity : AppCompatActivity() {
 //            }
 //        }
 //
-//        // Disconnect 버튼 클릭 리스너
-//        btnDisconnect.setOnClickListener {
-//            bleController.disconnectAllDevices()
-//        }
+//        // reqConnectedDevices
+//        bleController.getConnectedDevices()
 //
-//        toggleBtnAutoConnect.isChecked = toggleState
-//        // ToggleButton의 상태 변경 리스너 설정
-//        toggleBtnAutoConnect.setOnCheckedChangeListener { _, isChecked ->
-//            // 상태 저장
-//            with(sharedPreferences.edit()) {
-//                putBoolean("toggleAccessKey", isChecked)
-//                apply()
-//            }
+//        // reqRemoveParing
+//        bleController.removeParing(DeviceInfo)
 //
-//            if (isChecked) {
-//                // ToggleButton이 ON 상태일 때 실행할 코드
-//                Log.i(mainLogTag,"자동 연결 모드 ON")
-//            } else {
-//                // ToggleButton이 OFF 상태일 때 실행할 코드
-//                Log.i(mainLogTag,"자동 연결 모드 OFF")
-//            }
-//        }
+//        pubDisconnectAllDevice
+//        bleController.disconnectAllDevices()
 //
-//        // 데이터 전송 버튼 클릭 리스너
+//        // pubSendData
 //        btnSendData.setOnClickListener {
 //            val inputData = etInputData.text.toString() // EditText에서 입력된 데이터 가져오기
 //            if (inputData.isNotEmpty()) {
@@ -219,13 +213,8 @@ class MainActivity : AppCompatActivity() {
 //            }
 //        }
 //
-//        // ( 트리거 : APP )
-//        // 기기에 Info Request 를 해서 받는 Read Data
-//        btnRequestReadData.setOnClickListener {
-//            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
-//            bleController.requestReadData(macAddress.address)
-//        }
-//
+//        // TODO: 쓸지 말지 고민
+//        // subObserveData
 //        // LiveData 관찰 설정
 //        bleController.readData.observe(this, Observer { newData ->
 //            // 데이터가 변경되면 UI 업데이트
@@ -257,11 +246,14 @@ class MainActivity : AppCompatActivity() {
     // BLE Connect 권한 검사 메서드
     @SuppressLint("MissingPermission")
     private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
-        if(bleController.requestBlePermission(this)){
+        if(bleController.requestBlePermission(this@MainActivity)){
             // 블루투스 권한이 이미 있는 경우
             bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
                     Log.i(mainLogTag, "${selectedDevice.name} 기기 연결 성공")
+                    webAppInterface.resConnect(DeviceInfo(
+                        macAddress = selectedDevice.address,
+                        deviceName = selectedDevice.name))
                 } else {
                     Log.w(mainLogTag, "${selectedDevice.name} 기기 연결 실패")
                 }
@@ -359,7 +351,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun startBleScan() {
+    fun startBleScan() {
         try {
             bleController.bleScanPopup()
             popupView.visibility = View.VISIBLE
@@ -372,7 +364,6 @@ class MainActivity : AppCompatActivity() {
     private fun stopBleScanAndClearScanList() {
         try {
             bleController.stopBleScan()
-            Log.i(mainLogTag, "블루투스 스캔 정지 ")
             popupView.visibility = View.GONE // 팝업 숨김
             popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
             scanListAdapter.clearDevices()

@@ -46,4 +46,5 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     implementation(libs.gson)                           // data class -> JSON 변환 LIB
     implementation(libs.androidx.security.crypto)       // LocalStorage 암호화 LIB
+    implementation(libs.kotlin.reflect) // Kotlin Reflection LIB
 }

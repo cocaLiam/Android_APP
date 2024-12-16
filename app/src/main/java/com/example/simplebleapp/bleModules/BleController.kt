@@ -1,24 +1,16 @@
 package com.example.simplebleapp.bleModules
 
 // Operator Pack
-import android.content.Intent
-import android.content.pm.PackageManager
-import android.util.Log
-import android.Manifest
-import android.app.Activity
-import android.os.Handler
-import android.os.Build
 
 // UI Pack
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
-import android.widget.LinearLayout
-import android.widget.Toast
-import android.content.Context
-import androidx.activity.result.ActivityResult
-import androidx.activity.result.ActivityResultLauncher
 
 // BLE Pack
+
+// dataType Pack
+
+// Util Pack
+import android.Manifest
+import android.app.Activity
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
@@ -28,15 +20,25 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.le.BluetoothLeScanner
 import android.bluetooth.le.ScanCallback
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
+import android.os.Handler
+import android.util.Log
+import android.widget.LinearLayout
+import android.widget.Toast
+import androidx.activity.result.ActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
-
-// dataType Pack
 import androidx.lifecycle.MutableLiveData
 import java.lang.reflect.Method
-
-// Util Pack
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.log
+
 
 // Custom Package
 
@@ -319,14 +321,26 @@ class BleController(private val applicationContext: Context) {
                     // 쓰기 특성 등록
                     bleInfo.writeCharacteristic = service.getCharacteristic(writeCharacteristicUuid).apply {
                             if (this == null) Log.w(logTagBleController, "쓰기 특성을 찾을 수 없습니다.")
-                            else Log.d(logTagBleController, "쓰기 특성 발견: $serviceUuid")
+                            else Log.d(logTagBleController, "쓰기 특성 발견: $writeCharacteristicUuid")
                         }
 
                     // 읽기 특성 등록
                     bleInfo.readCharacteristic = service.getCharacteristic(readCharacteristicUuid).apply {
-                            if (this == null) Log.w(logTagBleController, "읽기 특성을 찾을 수 없습니다.")
-                            else Log.d(logTagBleController, "읽기 특성 발견: $serviceUuid")
-                        }
+                        if (this == null) Log.w(logTagBleController, "읽기 특성을 찾을 수 없습니다.")
+                        else Log.d(logTagBleController, "읽기 특성 발견: $readCharacteristicUuid")
+                    }
+
+                    Log.d(logTagBleController, "읽기 속성 확인 : ${bleInfo.readCharacteristic!!.properties}")
+                    if (bleInfo.readCharacteristic!!.properties and BluetoothGattCharacteristic.PROPERTY_READ == 0) {
+                        Log.e(logTagBleController, "읽기 특성이 읽기 속성을 지원하지 않습니다.")
+                    }
+
+                    Log.d(logTagBleController, "읽기 속성 권한 확인 : ${bleInfo.readCharacteristic!!.permissions}")
+                    if (bleInfo.readCharacteristic!!.permissions and BluetoothGattCharacteristic.PERMISSION_READ == 0) {
+                        Log.e(logTagBleController, "읽기 특성이 읽기 권한을 지원하지 않습니다.")
+                    }
+
+                    Log.d(logTagBleController," BleInfo : $bluetoothGattMap")
 
                     // Notification Subscribe 기능 사용 할 일이 없으므로 주석처리
 //                    // CCCD 설정 // Notification Subscribe
@@ -349,12 +363,12 @@ class BleController(private val applicationContext: Context) {
                 override fun onCharacteristicChanged(
                     gatt: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
-                    recievedData: ByteArray
+                    receivedData: ByteArray
                 ) {
-                    super.onCharacteristicChanged(gatt, characteristic, recievedData)
+                    super.onCharacteristicChanged(gatt, characteristic, receivedData)
                     if (characteristic.uuid == readCharacteristicUuid) {
-                        val receivedString = String(recievedData) // ByteArray를 문자열로 변환
-                        Log.i(logTagBleController, "수신된 데이터: $recievedData")
+                        val receivedString = String(receivedData) // ByteArray를 문자열로 변환
+                        Log.i(logTagBleController, "수신된 데이터: $receivedData")
                         // LiveData 업데이트
                         updateReadData(receivedString)
                         // Toast로 수신된 데이터 표시
@@ -365,44 +379,25 @@ class BleController(private val applicationContext: Context) {
                 // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
                 // 기기에 Info Request 를 해서 받는 Read Data
                 override fun onCharacteristicRead(
+                    // 구형 안드로이드 버전의 경우
                     gatt: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
-                    recievedData: ByteArray,
                     status: Int
                 ) {
-                    super.onCharacteristicRead(gatt, characteristic, recievedData, status)
-                    Log.i(logTagBleController, "수신된 데이터: $recievedData \n" +
-                            "status : $status")
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        // 읽은 데이터 가져오기
-                        val data = recievedData
-
-                        // ByteArray를 문자열로 변환
-                        val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
-                        Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
-
-                        // UTF-8로 변환
-                        val utf8String = String(data, Charsets.UTF_8)
-                        Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
-
-//                    // EUC-KR로 변환
-//                    val eucKrString = String(data, Charsets.EUC_KR)
-//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
-
-                        // ASCII로 변환
-                        val asciiString = String(data, Charsets.US_ASCII)
-                        Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
-
-                        // Hexadecimal로 출력
-                        val hexString = data.joinToString(" ") { String.format("%02X", it) }
-                        Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
-
-                        updateReadData(hexString)
-                        // UI 스레드에서 Toast 표시
-                        useToastOnSubThread("읽은 데이터: $hexString")
-                    } else {
-                        Log.e(logTagBleController, "데이터 읽기 실패: $status")
-                    }
+                    super.onCharacteristicRead(gatt, characteristic, status)
+                    Log.i(logTagBleController, " 구형 READ")
+                    handleCharacteristicRead(characteristic.value, status)
+                }
+                override fun onCharacteristicRead(
+                    // 일반 안드로이드 버전의 경우
+                    gatt: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                    receivedData: ByteArray,
+                    status: Int
+                ) {
+                    super.onCharacteristicRead(gatt, characteristic, receivedData, status)
+                    Log.i(logTagBleController, " 신형 READ")
+                    handleCharacteristicRead(receivedData, status)
                 }
 
                 // 데이터를 썼을 때 호출되는 콜백
@@ -446,6 +441,7 @@ class BleController(private val applicationContext: Context) {
                     } else {
                         // Android 13 (API 33) 미만
                         bleInfo.writeCharacteristic!!.value = data
+//                        bleInfo.writeCharacteristic!!.setValue(data)
                         bleInfo.writeCharacteristic!!.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
                         bleInfo.gatt!!.writeCharacteristic(bleInfo.writeCharacteristic!!)
                     }
@@ -470,7 +466,10 @@ class BleController(private val applicationContext: Context) {
 
             if (hasBluetoothConnectPermission()) {
                 try {
-                    bleInfo.gatt!!.readCharacteristic(bleInfo.readCharacteristic) // 읽기 요청
+                    useToastOnSubThread("Request Read Data 요청 $macAddress")
+                    Log.d(logTagBleController, "Request Read Data 요청 $macAddress")
+                    val requestReadResult = bleInfo.gatt!!.readCharacteristic(bleInfo.readCharacteristic) // 읽기 요청
+                    Log.d(logTagBleController, "READ Data 요청 결과 : $requestReadResult")
                 } catch (e: Exception) {
                     Log.e(logTagBleController, "Indicator 실패 : ${e.message}")
                 }
@@ -480,10 +479,57 @@ class BleController(private val applicationContext: Context) {
         }
     }
 
+    private fun handleCharacteristicRead(receivedData: ByteArray, status: Int) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            // 데이터를 성공적으로 읽었을 때 처리
+            useToastOnSubThread("App 이 Read 요청")
+            Log.i(logTagBleController, "App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음")
+            Log.i(logTagBleController, "수신된 데이터: $receivedData \n" +
+                    "status : $status")
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                // 읽은 데이터 가져오기
+                val data = receivedData
+
+                // ByteArray를 문자열로 변환
+                val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
+                Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
+
+                // UTF-8로 변환
+                val utf8String = String(data, Charsets.UTF_8)
+                Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
+
+//                    // EUC-KR로 변환
+//                    val eucKrString = String(data, Charsets.EUC_KR)
+//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
+
+                // ASCII로 변환
+                val asciiString = String(data, Charsets.US_ASCII)
+                Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
+
+                // Hexadecimal로 출력
+                val hexString = data.joinToString(" ") { String.format("%02X", it) }
+                Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
+
+                updateReadData(
+                    "(String) : $byteArrayString \n" +
+                         "(UTF-8)  : $utf8String \n" +
+                         "(ASCII)  : $asciiString \n" +
+                         "(Hex)    : $hexString \n"
+                )
+
+            } else {
+                Log.e(logTagBleController, "데이터 읽기 실패: $status")
+            }
+        } else {
+            // 에러 처리
+            Log.e("BLE", "Characteristic Read Failed, status: $status")
+        }
+    }
+
     /**
      * 페어링된 기기 목록 가져오기
      */
-    fun getBondedDevices(): Set<BluetoothDevice>? {
+    fun getParingDevices(): Set<BluetoothDevice>? {
         if(!::bluetoothAdapter.isInitialized){
             return null
         }

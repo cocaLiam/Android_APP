@@ -144,7 +144,7 @@ class MainActivity : AppCompatActivity() {
 
         // Paring check 버튼 클릭 리스너
         btnParingCheck.setOnClickListener {
-            val bondedDevices: Set<BluetoothDevice>? = bleController.getBondedDevices()
+            val bondedDevices: Set<BluetoothDevice>? = bleController.getParingDevices()
             Log.i(MAIN_LOG_TAG, "bondedDevices : $bondedDevices")
             Log.i(MAIN_LOG_TAG, "getConnectedDevices : ${bleController.getConnectedDevices()}")
             if (bondedDevices == null){
@@ -314,7 +314,7 @@ class MainActivity : AppCompatActivity() {
 
         if (toggleBtnAutoConnect.isChecked) {
             bleController.startBleScan(scanCallback)
-            val pairedDevices = bleController.getBondedDevices() ?: return
+            val pairedDevices = bleController.getParingDevices() ?: return
 
             handler.postDelayed({
                 val scannedDevices = scanListAdapter.getDeviceList()

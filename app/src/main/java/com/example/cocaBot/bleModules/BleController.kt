@@ -29,39 +29,22 @@ import android.bluetooth.le.ScanCallback
 // WebView Pack
 
 // DataClass Pack
+import com.example.cocaBot.bleModules.PermissionStatus
+import com.example.cocaBot.bleModules.BleDeviceInfo
 
 // Util Pack
 import android.annotation.SuppressLint
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import com.example.cocaBot.webViewModules.DeviceInfo
 import com.example.cocaBot.webViewModules.ReadData
 import com.example.cocaBot.webViewModules.WebAppInterface
-import org.json.JSONObject
-import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.full.declaredFunctions
-
 // Custom Package
 
 
-data class PermissionStatus(
-    var bluetoothEnabled: Boolean = false,
-    var locationPermission: Boolean = false,
-    var bluetoothScanPermission: Boolean = false,
-    var bluetoothConnectPermission: Boolean = false
-)
-
-data class BleDeviceInfo(
-    var device: BluetoothDevice? = null,
-    var deviceName: String? = null,
-    var gatt: BluetoothGatt? = null,
-    var writeCharacteristic: BluetoothGattCharacteristic? = null,
-    var readCharacteristic: BluetoothGattCharacteristic? = null
-)
 
 class BleController(private val context: Context) {
     // BLE 관련 멤버 변수
@@ -70,10 +53,6 @@ class BleController(private val context: Context) {
     private lateinit var bluetoothLeScanner: BluetoothLeScanner
     private lateinit var scanCallback:ScanCallback
     private lateinit var popupContainer:LinearLayout
-
-    // 수신 데이터를 LiveData로 관리
-    private var _readData = MutableLiveData<Any>() // 내부에서만 수정 가능
-    val readData: LiveData<Any> get() = _readData // 외부에서는 읽기만 가능
 
 //    // UUID는 GATT 서비스와 특성을 식별하는 데 사용됩니다.
     // TRS Service ( peri_uart )
@@ -90,6 +69,7 @@ class BleController(private val context: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
+    // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
     private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
 
     /**
@@ -353,55 +333,30 @@ class BleController(private val context: Context) {
                     if (characteristic.uuid == readCharacteristicUuid) {
                         val receivedString = String(recievedData) // ByteArray를 문자열로 변환
                         Log.i(logTagBleController, "수신된 데이터: $recievedData")
-                        // LiveData 업데이트
-                        updateReadData(receivedString)
                     }
                 }
 
                 // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
-                // 기기에 Info Request 를 해서 받는 Read Data
                 override fun onCharacteristicRead(
+                    // 구형 안드로이드 버전의 경우
                     gatt: BluetoothGatt,
                     characteristic: BluetoothGattCharacteristic,
-                    recievedData: ByteArray,
                     status: Int
                 ) {
-                    super.onCharacteristicRead(gatt, characteristic, recievedData, status)
-                    Log.i(logTagBleController, "수신된 데이터: $recievedData \n" +
-                            "status : $status")
-                    if (status == BluetoothGatt.GATT_SUCCESS) {
-                        // 읽은 데이터 가져오기
-                        val data = recievedData
-
-                        // ByteArray를 문자열로 변환
-                        val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
-                        Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
-
-                        // UTF-8로 변환
-                        val utf8String = String(data, Charsets.UTF_8)
-                        Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
-
-//                    // EUC-KR로 변환
-//                    val eucKrString = String(data, Charsets.EUC_KR)
-//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
-
-                        // ASCII로 변환
-                        val asciiString = String(data, Charsets.US_ASCII)
-                        Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
-
-                        // Hexadecimal로 출력
-                        val hexString = data.joinToString(" ") { String.format("%02X", it) }
-                        Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
-
-                        WebAppInterface.getInstance().resReadData(ReadData(
-                            DeviceInfo(deviceName = device.name, macAddress = device.address),
-                            msg = mapOf("msg" to hexString)
-                        ))
-
-                        updateReadData(hexString)
-                    } else {
-                        Log.e(logTagBleController, "데이터 읽기 실패: $status")
-                    }
+                    super.onCharacteristicRead(gatt, characteristic, status)
+                    Log.i(logTagBleController, " 구형 READ")
+                    handleCharacteristicRead(characteristic.value, status)
+                }
+                override fun onCharacteristicRead(
+                    // 일반 안드로이드 버전의 경우
+                    gatt: BluetoothGatt,
+                    characteristic: BluetoothGattCharacteristic,
+                    receivedData: ByteArray,
+                    status: Int
+                ) {
+                    super.onCharacteristicRead(gatt, characteristic, receivedData, status)
+                    Log.i(logTagBleController, " 신형 READ")
+                    handleCharacteristicRead(receivedData, status)
                 }
 
                 // 데이터를 썼을 때 호출되는 콜백
@@ -476,6 +431,54 @@ class BleController(private val context: Context) {
             }
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "블루투스 연결 시도 중 보안 예외 발생: ${e.message}")
+        }
+    }
+
+    // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
+    private fun handleCharacteristicRead(receivedData: ByteArray, status: Int) {
+        if (status == BluetoothGatt.GATT_SUCCESS) {
+            // 데이터를 성공적으로 읽었을 때 처리
+            useToastOnSubThread("App 이 Read 요청")
+            Log.i(logTagBleController, "App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음")
+            Log.i(logTagBleController, "수신된 데이터: $receivedData \n" +
+                    "status : $status")
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                // 읽은 데이터 가져오기
+                val data = receivedData
+
+                // ByteArray를 문자열로 변환
+                val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
+                Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
+
+                // UTF-8로 변환
+                val utf8String = String(data, Charsets.UTF_8)
+                Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
+
+//                    // EUC-KR로 변환
+//                    val eucKrString = String(data, Charsets.EUC_KR)
+//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
+
+                // ASCII로 변환
+                val asciiString = String(data, Charsets.US_ASCII)
+                Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
+
+                // Hexadecimal로 출력
+                val hexString = data.joinToString(" ") { String.format("%02X", it) }
+                Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
+
+                // UI 스레드에서 Toast 표시
+                Log.i(logTagBleController,
+                    "(String) : $byteArrayString \n" +
+                         "(UTF-8)  : $utf8String \n" +
+                         "(ASCII)  : $asciiString \n" +
+                         "(Hex)    : $hexString \n"
+                )
+            } else {
+                Log.e(logTagBleController, "데이터 읽기 실패: $status")
+            }
+        } else {
+            // 에러 처리
+            Log.e("BLE", "Characteristic Read Failed, status: $status")
         }
     }
 
@@ -624,11 +627,6 @@ class BleController(private val context: Context) {
         Handler(context.mainLooper).post {
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
-    }
-
-    // 데이터를 업데이트하는 메서드
-    fun updateReadData(data: Any) {
-        _readData.postValue(data) // LiveData에 새로운 데이터 설정
     }
 
     fun getPropertiesString(properties: Int): String {

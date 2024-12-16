@@ -63,8 +63,7 @@ class HybridAppBridge(
         webView.webChromeClient = WebChromeClient()
 
         // WebView에 JavaScript 인터페이스 추가 [ 다른 webView 세팅이 끝나고 마지막에 해야함 ]
-        val webAppInterface = WebAppInterface.getInstance()
-        webView.addJavascriptInterface(webAppInterface, "AndroidInterface")
+        webView.addJavascriptInterface(WebAppInterface.getInstance(), "AndroidInterface")
     }
 
     /**

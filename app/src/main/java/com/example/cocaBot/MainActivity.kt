@@ -42,9 +42,9 @@ import org.json.JSONObject
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import com.example.cocaBot.utils.LiveDataManager
 import androidx.lifecycle.Observer
 import android.util.Log
-
 
 
 class MainActivity : AppCompatActivity() {
@@ -60,14 +60,16 @@ class MainActivity : AppCompatActivity() {
     // UI 관련 변수들
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var debuggingButton: Button
-    // 팝업 UI 관련 변수들
     private lateinit var btnConnect: Button
     private lateinit var btnClose: Button
+
+    // 팝업 UI 관련 변수들
     private lateinit var popupContainer: LinearLayout
     private lateinit var recyclerScanList: RecyclerView
     private lateinit var popupView: View
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
 
+    // 기타 등등 변수들
     private val mainLogTag = " - MainActivity "
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -111,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.178:3000"
+        val url = "http://192.168.45.148:3000"
         hybridAppBridge.loadUrl(url)
 
         // 캐시가 남아 있으면
@@ -160,8 +162,17 @@ class MainActivity : AppCompatActivity() {
 
         debuggingButton.setOnClickListener {
             startBleScan()
-            webAppInterface.subObserveData(mapOf("aa" to "bb"))
         }
+
+        // LiveData 관찰
+        /*LiveDataManager.updateObserveData(mapOf("aa" to "bb")) 로 업데이트 할 때 마다
+        * webAppInterface.subObserveData(newData) 호출되서 APP -> WEB Data 전송
+        */
+        LiveDataManager.observeData.observe(this, Observer { newData ->
+            // 데이터가 변경되면 UI 업데이트
+            webAppInterface.subObserveData(newData)
+        })
+
 //        // reqConnect
 //        btnScanStart.setOnClickListener {
 //            if(bleController.requestBlePermission(this)){

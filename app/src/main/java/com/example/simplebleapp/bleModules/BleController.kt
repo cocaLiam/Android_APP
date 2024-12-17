@@ -67,25 +67,15 @@ class BleController(private val applicationContext: Context) {
     private var _readData = MutableLiveData<Any>() // 내부에서만 수정 가능
     val readData: LiveData<Any> get() = _readData // 외부에서는 읽기만 가능
 
-//    // UUID는 GATT 서비스와 특성을 식별하는 데 사용됩니다.
-//    private val SERVICE_UUID = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455") //
-//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("49535343-8841-43f4-a8d4-ecbe34729bb3") //
-//    private val READ_CHARACTERISTIC_UUID = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616") //
+//    // Service : 1
+//    private val serviceUuid = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
+//    private val readCharacteristicUuid = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
+//    private val writeCharacteristicUuid = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
 
-//    // Microchip Keyboard
-//    private val SERVICE_UUID = UUID.fromString("00001812-0000-1000-8000-00805f9b34fb") //
-//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("00002a4e-0000-1000-8000-00805f9b34fb") //
-//    private val READ_CHARACTERISTIC_UUID = UUID.fromString("00002a4d-0000-1000-8000-00805f9b34fb") //
-
-//    // pic32cx-bz 읽기 특성
-//    private val SERVICE_UUID =              UUID.fromString("4d434850-5255-42d0-aef8-881facf4ceea")
-//    private val WRITE_CHARACTERISTIC_UUID = UUID.fromString("4d434850-5255-42d0-aef8-881fccf4ceea")
-//    private val READ_CHARACTERISTIC_UUID =  UUID.fromString("4d434850-5255-42d0-aef8-881fbcf4ceea")
-
-    // TRS Service ( peri_uart )
-    private val serviceUuid = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
-    private val writeCharacteristicUuid = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
-    private val readCharacteristicUuid = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
+    // Service : 2
+    private val serviceUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6075c")
+    private val readCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6076c")
+    private val writeCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6077c")
 
     // ActivityResultLauncher를 클래스의 멤버 변수로 선언
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
@@ -479,50 +469,42 @@ class BleController(private val applicationContext: Context) {
         }
     }
 
-    private fun handleCharacteristicRead(receivedData: ByteArray, status: Int) {
+    private fun handleCharacteristicRead(receivedData: ByteArray?, status: Int) {
+        Log.i(logTagBleController, "수신된 데이터: $receivedData status : $status")
+
+        // Null 체크 및 기본값 설정
+        val data = receivedData ?: ByteArray(0) // receivedData가이면 빈 배열로 대체
+
         if (status == BluetoothGatt.GATT_SUCCESS) {
             // 데이터를 성공적으로 읽었을 때 처리
             useToastOnSubThread("App 이 Read 요청")
             Log.i(logTagBleController, "App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음")
-            Log.i(logTagBleController, "수신된 데이터: $receivedData \n" +
-                    "status : $status")
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // 읽은 데이터 가져오기
-                val data = receivedData
 
-                // ByteArray를 문자열로 변환
-                val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
-                Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
+            // ByteArray를 문자열로 변환
+            val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
+            Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
 
-                // UTF-8로 변환
-                val utf8String = String(data, Charsets.UTF_8)
-                Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
+            // UTF-8로 변환
+            val utf8String = String(data, Charsets.UTF_8)
+            Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
 
-//                    // EUC-KR로 변환
-//                    val eucKrString = String(data, Charsets.EUC_KR)
-//                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
+            // ASCII로 변환
+            val asciiString = String(data, Charsets.US_ASCII)
+            Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
 
-                // ASCII로 변환
-                val asciiString = String(data, Charsets.US_ASCII)
-                Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
+            // Hexadecimal로 출력
+            val hexString = data.joinToString(" ") { String.format("%02X", it) }
+            Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
 
-                // Hexadecimal로 출력
-                val hexString = data.joinToString(" ") { String.format("%02X", it) }
-                Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
+            updateReadData(
+                "(String) : $byteArrayString \n" +
+                        "(UTF-8)  : $utf8String \n" +
+                        "(ASCII)  : $asciiString \n" +
+                        "(Hex)    : $hexString \n"
+            )
 
-                updateReadData(
-                    "(String) : $byteArrayString \n" +
-                         "(UTF-8)  : $utf8String \n" +
-                         "(ASCII)  : $asciiString \n" +
-                         "(Hex)    : $hexString \n"
-                )
-
-            } else {
-                Log.e(logTagBleController, "데이터 읽기 실패: $status")
-            }
         } else {
-            // 에러 처리
-            Log.e("BLE", "Characteristic Read Failed, status: $status")
+            Log.e(logTagBleController, "데이터 읽기 실패: $status")
         }
     }
 

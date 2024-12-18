@@ -67,15 +67,15 @@ class BleController(private val applicationContext: Context) {
     private var _readData = MutableLiveData<Any>() // 내부에서만 수정 가능
     val readData: LiveData<Any> get() = _readData // 외부에서는 읽기만 가능
 
-//    // Service : 1
-//    private val serviceUuid = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
-//    private val readCharacteristicUuid = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
-//    private val writeCharacteristicUuid = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
+    // Service : 1
+    private val serviceUuid = UUID.fromString("49535343-fe7d-4ae5-8fa9-9fafd205e455")
+    private val readCharacteristicUuid = UUID.fromString("49535343-1e4d-4bd9-ba61-23c647249616")
+    private val writeCharacteristicUuid = UUID.fromString("49535343-8841-43F4-A8D4-ECBE34729BB3")
 
-    // Service : 2
-    private val serviceUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6075c")
-    private val readCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6076c")
-    private val writeCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6077c")
+//    // Service : 2
+//    private val serviceUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6075c")
+//    private val readCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6076c")
+//    private val writeCharacteristicUuid = UUID.fromString("40327de3-c2a8-6691-4a49-68859ff6077c")
 
     // ActivityResultLauncher를 클래스의 멤버 변수로 선언
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
@@ -231,6 +231,20 @@ class BleController(private val applicationContext: Context) {
                 device.createBond() // 페어링 시도
                 Log.i(logTagBleController, "페어링 시도 요청 : ${device.bondState}")
             }
+
+//            Log.i(logTagBleController, "문일이 특제 소스 Main 쓰레드 블럭 !")
+//            Thread {
+//                // 백그라운드 스레드에서 실행
+//                Log.d(logTagBleController, "작업 시작")
+//                Thread.sleep(5000) // 5초 대기
+//                Log.d(logTagBleController, "작업 완료")
+//            }.start()
+
+//            Log.i(logTagBleController, "문일이 특제 소스 Main 쓰레드 블럭 !")
+//            Log.d(logTagBleController, "작업 시작")
+//            Thread.sleep(5000) // 5초 대기
+//            Log.d(logTagBleController, "작업 완료")
+
             // GATT 서버에 연결 시도
             device.connectGatt(applicationContext, false, object : BluetoothGattCallback() {
                 // GATT 연결 상태가 변경되었을 때 호출되는 콜백

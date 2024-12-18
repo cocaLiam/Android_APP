@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.148:3000"
+        val url = "http://192.168.45.113:3000"
         hybridAppBridge.loadUrl(url)
 
         // 캐시가 남아 있으면

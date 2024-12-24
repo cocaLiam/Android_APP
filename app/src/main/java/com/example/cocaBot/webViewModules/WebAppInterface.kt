@@ -84,13 +84,10 @@ class WebAppInterface private constructor(
     fun reqRemoveParing(jsonString: String) {
         Log.i(webAppInterFaceTag,"reqRemoveParing UP")
         try {
+            Log.d("jsonString : ",jsonString)
             // 전달된 JSON 문자열을 DeviceInfo 객체로 변환
             val gson = Gson()
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
-
-            // 변환된 DeviceInfo 객체의 데이터 접근
-            Log.d(webAppInterFaceTag, "DeviceInfo - MAC Address: ${deviceInfo.macAddress}")
-            Log.d(webAppInterFaceTag, "DeviceInfo - Device Name: ${deviceInfo.deviceName}")
 
             if(bleController.removeParing(deviceInfo.macAddress)){
                 resRemoveParing(deviceInfo)
@@ -165,10 +162,6 @@ class WebAppInterface private constructor(
             // 전달된 JSON 문자열을 DeviceInfo 객체로 변환
             val gson = Gson()
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
-
-            // 변환된 DeviceInfo 객체의 데이터 접근
-            Log.d(webAppInterFaceTag, "DeviceInfo - MAC Address: ${deviceInfo.macAddress}")
-            Log.d(webAppInterFaceTag, "DeviceInfo - Device Name: ${deviceInfo.deviceName}")
 
             // BLE Controller에서 데이터 읽기 요청
             bleController.requestReadData(deviceInfo.macAddress)

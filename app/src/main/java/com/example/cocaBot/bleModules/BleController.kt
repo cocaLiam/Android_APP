@@ -590,14 +590,17 @@ class BleController(private val context: Context) {
      */
     fun removeParing(macAddress: String): Boolean {
         try {
-            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw Exception("BleDeviceInfo 객체가 초기화되지 않았습니다.: $macAddress")
-            val device = bleInfo.device ?: throw Exception("BluetoothDevice 객체가 초기화되지 않았습니다: $macAddress")
+            val bleDeviceSet:Set<BluetoothDevice> = getParingDevices()
+            for (bleDevice in bleDeviceSet){
+                if (macAddress == bleDevice.address){
+                    // Kotlin 리플렉션을 사용하여 메서드 호출
+                    val method = bleDevice::class.declaredFunctions.find { it.name == "removeBond" }
+                    bluetoothGattMap.remove(macAddress)
+                    return method?.call(bleDevice) as? Boolean ?: false
+                }
+            }
+            return false
 
-//            val method: Method = bleInfo.device!!.javaClass.getMethod("removeBond")
-//            return method.invoke(bleInfo.device) as Boolean
-            // Kotlin 리플렉션을 사용하여 메서드 호출
-            val method = device::class.declaredFunctions.find { it.name == "removeBond" }
-            return method?.call(device) as? Boolean ?: false
         } catch (e: Exception) {
             Log.e(logTagBleController, "페어링된 기기 삭제 실패: ${e.message}")
             return false

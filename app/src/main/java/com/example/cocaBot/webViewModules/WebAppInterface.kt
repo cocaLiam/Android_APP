@@ -74,10 +74,34 @@ class WebAppInterface private constructor(
  */
     @JavascriptInterface
     fun reqConnect() {
-        // Web에서 전달받은 메시지를 Toast로 표시
         mainActivity.runOnUiThread {
+            mainActivity.stopBleScanAndClearScanList()
             mainActivity.startBleScan()
         }
+    }
+
+    @JavascriptInterface
+    fun reqDisconnect(jsonString: String) {
+        Log.i(webAppInterFaceTag,"reqDisconnect UP")
+        try {
+            Log.d("jsonString : ",jsonString)
+            // 전달된 JSON 문자열을 DeviceInfo 객체로 변환
+            val gson = Gson()
+            val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
+
+            if(bleController.disconnectDevice(deviceInfo.macAddress)){
+                resDisconnect(deviceInfo)
+            }else{
+//                deviceInfo.deviceName = ""
+                deviceInfo.macAddress = ""
+                resDisconnect(deviceInfo)
+            }
+
+        } catch (e: Exception) {
+            Log.e(webAppInterFaceTag, "reqDisconnect JSON 변환 중 오류 발생: ${e.message}")
+        }
+        Log.i(webAppInterFaceTag,"reqDisconnect Down")
+
     }
 
     @JavascriptInterface
@@ -209,6 +233,13 @@ class WebAppInterface private constructor(
 
             // 필요 시 JSONObject로 변환
             val jsonObject = JSONObject(jsonString)
+
+            // TODO: 임시로 00, 01 DATA 를 보내는 형상
+            val inputData = writeData.msg[writeData.msg.keys.firstOrNull()].toString()
+            val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
+            bleController.writeData(dataToSend,writeData.deviceInfo.macAddress)
+            //
+
             Log.d(webAppInterFaceTag, "JSONObject: $jsonObject")
         } catch (e: JSONException) {
             e.printStackTrace()
@@ -230,6 +261,26 @@ class WebAppInterface private constructor(
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webViewRef.get()?.post {
+            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resDisconnect(dataToSend: DeviceInfo) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
 
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
@@ -248,6 +299,7 @@ class WebAppInterface private constructor(
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
 
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
@@ -266,6 +318,7 @@ class WebAppInterface private constructor(
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
 
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
@@ -284,6 +337,7 @@ class WebAppInterface private constructor(
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
 
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
@@ -302,7 +356,7 @@ class WebAppInterface private constructor(
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
-
+        jsonObject.put("resResult", jsonValidationResult.resResult)
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
@@ -344,6 +398,7 @@ class WebAppInterface private constructor(
         val jsonObject = JSONObject()
         val emptyValueKeys = mutableListOf<String>()
         val missingKeys = mutableListOf<String>()
+        var resResult = true
 
         try {
             // data class -> JSON 문자열 변환
@@ -372,8 +427,14 @@ class WebAppInterface private constructor(
                 }
             }
 
-            if(missingKeys.isNotEmpty()) Log.e(webAppInterFaceTag, "Missing Keys: $missingKeys")
-            if(emptyValueKeys.isNotEmpty()) Log.e(webAppInterFaceTag, "Empty Value Keys: $emptyValueKeys")
+            if(missingKeys.isNotEmpty()) {
+                Log.e(webAppInterFaceTag, "Missing Keys: $missingKeys")
+                resResult = false
+            }
+            if(emptyValueKeys.isNotEmpty()) {
+                Log.e(webAppInterFaceTag, "Empty Value Keys: $emptyValueKeys")
+                resResult = false
+            }
             // 최종적으로 JSON 객체 반환
             for (key in tempJsonObject.keys()) {
                 jsonObject.put(key, tempJsonObject.get(key))
@@ -384,6 +445,6 @@ class WebAppInterface private constructor(
         }
 
         // 결과 반환
-        return JsonValidationResult(jsonObject, emptyValueKeys, missingKeys)
+        return JsonValidationResult(jsonObject, resResult, emptyValueKeys, missingKeys)
     }
 }

@@ -26,6 +26,7 @@ data class WriteData(
 
 data class JsonValidationResult(
     val jsonObject: JSONObject,
+    var resResult: Boolean,
     val emptyValueKeys: List<String>,
     val missingKeys: List<String>
 )

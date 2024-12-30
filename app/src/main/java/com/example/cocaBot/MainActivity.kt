@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.65:3000"
+        val url = "http://192.168.45.54:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
@@ -268,7 +268,10 @@ class MainActivity : AppCompatActivity() {
                         macAddress = selectedDevice.address,
                         deviceName = selectedDevice.name))
                 } else {
-                    Log.w(mainLogTag, "${selectedDevice.name} 기기 연결 실패")
+                    Log.w(mainLogTag, "${selectedDevice.name} 기기 연결 끊어짐")
+//                    webAppInterface.resConnect(DeviceInfo(
+//                        macAddress = "",
+//                        deviceName = selectedDevice.name))
                 }
             })
         }
@@ -374,7 +377,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun stopBleScanAndClearScanList() {
+    fun stopBleScanAndClearScanList() {
         try {
             bleController.stopBleScan()
             popupView.visibility = View.GONE // 팝업 숨김

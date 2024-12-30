@@ -518,21 +518,25 @@ class BleController(private val context: Context) {
         return emptyList()
     }
 
-//    /**
-//     * 특정 기기 연결 해제
-//     */
-//    fun disconnectDevice(device: BluetoothDevice) {
-//        val gatt:BluetoothGatt = bluetoothGattMap[device] ?: return
-//        if (hasBluetoothConnectPermission()){
-//            try {
-//                gatt.disconnect()
-//                gatt.close()
-//                bluetoothGattMap.remove(device)
-//            } catch (e: SecurityException) {
-//                Log.e(logTagBleController, "disconnectDevice Failed ${e.message}")
-//            }
-//        }
-//    }
+    /**
+     * 특정 기기 연결 해제
+     */
+    fun disconnectDevice(macAddress: String) : Boolean {
+        val bleDevice:BleDeviceInfo = bluetoothGattMap[macAddress] ?: return false
+        val gatt = bleDevice.gatt
+        if (hasBluetoothConnectPermission()){
+            try {
+                gatt?.disconnect()
+                gatt?.close()
+                bluetoothGattMap.remove(macAddress)
+                return true
+            } catch (e: SecurityException) {
+                Log.e(logTagBleController, "disconnectDevice Failed ${e.message}")
+                return false
+            }
+        }
+        return false
+    }
 
     /**
      * 모든 기기 연결 해제

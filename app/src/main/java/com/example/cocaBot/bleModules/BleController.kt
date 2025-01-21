@@ -367,7 +367,7 @@ class BleController(private val context: Context) {
                 ) {
                     super.onCharacteristicWrite(gatt, characteristic, status)
                     if (status == BluetoothGatt.GATT_SUCCESS) {
-                        // 데이터 전송 성공
+                        // 데 공
                         Log.i(logTagBleController, "데이터 전송 성공: ${String(characteristic.value)}")
                     } else {
                         // 데이터 전송 실패

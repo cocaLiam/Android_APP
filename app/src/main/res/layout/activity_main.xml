@@ -5,29 +5,38 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
-    <!-- 상단에 공간을 차지할 TextView와 Button을 포함한 LinearLayout -->
+<!--    상단 여유 공간-->
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:padding="16dp">
-
-        <!-- TextView -->
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="APP"
-            android:textSize="18sp"
-            android:gravity="center_vertical" />
-
-        <!-- Button -->
-        <Button
-            android:id="@+id/debuggingButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Debuging Button" />
+        android:padding="12dp">
     </LinearLayout>
+
+<!--    &lt;!&ndash; 상단에 공간을 차지할 TextView와 Button을 포함한 LinearLayout &ndash;&gt;-->
+<!--    &lt;!&ndash;    디버깅전용&ndash;&gt;-->
+<!--    <LinearLayout-->
+<!--        android:orientation="horizontal"-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="wrap_content"-->
+<!--        android:padding="16dp">-->
+
+<!--        &lt;!&ndash; TextView &ndash;&gt;-->
+<!--        <TextView-->
+<!--            android:layout_width="0dp"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:layout_weight="1"-->
+<!--            android:text="APP"-->
+<!--            android:textSize="18sp"-->
+<!--            android:gravity="center_vertical" />-->
+
+<!--        &lt;!&ndash; Button &ndash;&gt;-->
+<!--        <Button-->
+<!--            android:id="@+id/debuggingButton"-->
+<!--            android:layout_width="wrap_content"-->
+<!--            android:layout_height="wrap_content"-->
+<!--            android:text="Debugging Button" />-->
+<!--    </LinearLayout>-->
 
     <!-- WebView의 높이를 조정하여 전체를 차지하지 않도록 설정 -->
     <WebView

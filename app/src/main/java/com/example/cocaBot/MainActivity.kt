@@ -59,7 +59,7 @@ class MainActivity : AppCompatActivity() {
 
     // UI 관련 변수들
     private val handler = Handler(Looper.getMainLooper())
-    private lateinit var debuggingButton: Button
+//    private lateinit var debuggingButton: Button
     private lateinit var btnConnect: Button
     private lateinit var btnClose: Button
 
@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.54:3000"
+        val url = "http://192.168.45.188:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
         // RecyclerView 초기화
         scanListAdapter.setupRecyclerView(recyclerScanList, this)
 
-        debuggingButton = findViewById(R.id.debuggingButton)
+//        debuggingButton = findViewById(R.id.debuggingButton)
 
         // 팝업을 루트 레이아웃에 추가
         rootLayout.addView(popupView)
@@ -161,10 +161,10 @@ class MainActivity : AppCompatActivity() {
         bleController.registerPopupContainer(popupContainer)
         bleController.requestBlePermission(this@MainActivity)
 
-        debuggingButton.setOnClickListener {
-//            startBleScan()
-            webAppInterface.subObserveData(mapOf("subObserveData Key" to "subObserveData Value"))
-        }
+//        debuggingButton.setOnClickListener {
+////            startBleScan()
+//            webAppInterface.subObserveData(mapOf("subObserveData Key" to "subObserveData Value"))
+//        }
 
         // LiveData 관찰
         /*LiveDataManager.updateObserveData(mapOf("aa" to "bb")) 로 업데이트 할 때 마다

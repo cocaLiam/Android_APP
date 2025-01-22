@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.188:3000"
+        val url = "http://192.168.45.209:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 

@@ -13,7 +13,7 @@ data class PermissionStatus(
 
 data class BleDeviceInfo(
     var device: BluetoothDevice? = null,
-    var deviceName: String? = null,
+    var deviceType: String? = null,
     var gatt: BluetoothGatt? = null,
     var writeCharacteristic: BluetoothGattCharacteristic? = null,
     var readCharacteristic: BluetoothGattCharacteristic? = null

@@ -74,10 +74,12 @@ class WebAppInterface private constructor(
  */
     @JavascriptInterface
     fun reqConnect() {
+        Log.d(webAppInterFaceTag, "Web으로부터 reqConnect 요청 처리 UP")
         mainActivity.runOnUiThread {
             mainActivity.stopBleScanAndClearScanList()
             mainActivity.startBleScan()
         }
+    Log.d(webAppInterFaceTag, "Web으로부터 reqConnect 요청 처리 DOWN")
     }
 
     @JavascriptInterface
@@ -92,7 +94,7 @@ class WebAppInterface private constructor(
             if(bleController.disconnectDevice(deviceInfo.macAddress)){
                 resDisconnect(deviceInfo)
             }else{
-//                deviceInfo.deviceName = ""
+//                deviceInfo.deviceType = ""
                 deviceInfo.macAddress = ""
                 resDisconnect(deviceInfo)
             }
@@ -116,7 +118,7 @@ class WebAppInterface private constructor(
             if(bleController.removeParing(deviceInfo.macAddress)){
                 resRemoveParing(deviceInfo)
             }else{
-                deviceInfo.deviceName = ""
+                deviceInfo.deviceType = ""
                 deviceInfo.macAddress = ""
                 resRemoveParing(deviceInfo)
             }
@@ -141,7 +143,7 @@ class WebAppInterface private constructor(
 
         bleDeviceSet.forEach { bluetoothDevice ->
             val deviceInfo = DeviceInfo(
-                deviceName = bluetoothDevice.name,
+                deviceType = bluetoothDevice.name,
                 macAddress = bluetoothDevice.address
             )
             Log.i(webAppInterFaceTag,"deviceInfo $deviceInfo")
@@ -168,7 +170,7 @@ class WebAppInterface private constructor(
 
         bleDeviceList.forEach { bluetoothDevice ->
             val deviceInfo = DeviceInfo(
-                deviceName = bluetoothDevice.name,
+                deviceType = bluetoothDevice.name,
                 macAddress = bluetoothDevice.address
             )
             deviceInfoList.add(deviceInfo)
@@ -224,7 +226,7 @@ class WebAppInterface private constructor(
 
             // WriteData 객체의 데이터 접근
             Log.d(webAppInterFaceTag, "DeviceInfo - MAC Address: ${writeData.deviceInfo.macAddress}")
-            Log.d(webAppInterFaceTag, "DeviceInfo - Device Name: ${writeData.deviceInfo.deviceName}")
+            Log.d(webAppInterFaceTag, "DeviceInfo - Device Name: ${writeData.deviceInfo.deviceType}")
             Log.d(webAppInterFaceTag, "Message 1: ${writeData.msg}")
             Log.d(webAppInterFaceTag, "Type of writeData.msg: ${writeData.msg::class.java.name}")
             Log.d(webAppInterFaceTag, "Message 2: ${writeData.msg.keys}")
@@ -258,6 +260,25 @@ class WebAppInterface private constructor(
  * 2. Subscribe 타입 : App(publish) --> Web
  */
     fun resConnect(dataToSend: DeviceInfo) {
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        webViewRef.get()?.post {
+            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+            }
+        }
+    }
+
+    fun resAutoConnect(dataToSend: DeviceInfo) {
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -342,6 +363,7 @@ class WebAppInterface private constructor(
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
+        Log.i(webAppInterFaceTag, "$jsonObject");
         // WebView를 통해 JavaScript 함수 호출
         webViewRef.get()?.post {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
@@ -350,6 +372,7 @@ class WebAppInterface private constructor(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+
     }
 
     fun resReadData(dataToSend: ReadData) {

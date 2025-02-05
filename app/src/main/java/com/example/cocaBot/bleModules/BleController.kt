@@ -165,10 +165,14 @@ class BleController(private val context: Context) {
         startBleScan()
 
         // 10초 후 스캔 중지
-        Log.i(logTagBleController, "스캔 타임아웃 제한시간 : ${scanPeriod / 1000}초 ")
+        Log.i(logTagBleController, "스캔 타임아웃 제한시간 : ${scanPeriod / 1000}초   " +
+                "popupContainer 종류 : $popupContainer")
+        // 이전 타이머가 있다면 제거
+
         when (popupContainer) {
             is LinearLayout -> {  // 특정 팝업창에 Text로 UI 표현하는 경우
                 popupContainer.postDelayed({
+                    Log.w(logTagBleController, "--스캔 타임아웃-- ")
                     stopBleScan()
                 }, scanPeriod)
             }
@@ -240,7 +244,7 @@ class BleController(private val context: Context) {
 
                             val bleDeviceInfo = BleDeviceInfo()
                             bleDeviceInfo.device = device
-                            bleDeviceInfo.deviceName = device.name
+                            bleDeviceInfo.deviceType = device.name
                             bleDeviceInfo.gatt = gatt
                             bluetoothGattMap[device.address] = bleDeviceInfo
                             onConnectionStateChange(true)
@@ -547,7 +551,7 @@ class BleController(private val context: Context) {
         for ((key, deviceInfo) in bluetoothGattMap) {
             if (hasBluetoothConnectPermission()) {
                 try {
-                    Log.i(logTagBleController, "Disconnect 시도 : ${deviceInfo.deviceName}")
+                    Log.i(logTagBleController, "Disconnect 시도 : ${deviceInfo.deviceType}")
                     deviceInfo.gatt?.disconnect()
                     deviceInfo.gatt?.close()
                     Log.i(logTagBleController, "Disconnect 완료 : ${deviceInfo.device?.address}")
@@ -572,7 +576,7 @@ class BleController(private val context: Context) {
 //
 //            if (hasBluetoothConnectPermission()) {
 //                try {
-//                    Log.i(logTagBleController,"Disconnect 시도 : ${deviceInfo.deviceName}")
+//                    Log.i(logTagBleController,"Disconnect 시도 : ${deviceInfo.deviceType}")
 //                    deviceInfo.gatt?.disconnect()
 //                    deviceInfo.gatt?.close()
 //                    Log.i(logTagBleController,"Disconnect 시도 : ${deviceInfo.device?.address}")

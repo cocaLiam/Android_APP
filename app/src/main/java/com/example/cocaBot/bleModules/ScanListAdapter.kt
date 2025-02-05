@@ -39,7 +39,7 @@ class ScanListAdapter() :
     /* RecyclerView의 각 항목에 데이터를 바인딩하는 메서드 */
     override fun onBindViewHolder(holder: ScanViewHolder, position: Int) {
         val device = devices[position] // 현재 위치의 BLE 장치 정보 가져오기
-        holder.deviceName.text = device.name ?: "Unknown Device" // 장치 이름 설정 (없으면 "Unknown Device")
+        holder.deviceType.text = device.name ?: "Unknown Device" // 장치 이름 설정 (없으면 "Unknown Device")
         holder.radioButton.isChecked = position == selectedPosition // 라디오 버튼 선택 상태 설정
 
         // 라디오 버튼 클릭 리스너
@@ -75,7 +75,7 @@ class ScanListAdapter() :
 
     /* RecyclerView의 각 항목을 관리하는 ViewHolder 클래스 */
     class ScanViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val deviceName: TextView = itemView.findViewById(R.id.device_name) // 장치 이름을 표시하는 TextView
+        val deviceType: TextView = itemView.findViewById(R.id.device_type) // 장치 이름을 표시하는 TextView
         val radioButton: RadioButton = itemView.findViewById(R.id.radio_button) // 선택 상태를 표시하는 RadioButton
     }
 

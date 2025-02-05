@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
     // BLE 관련 변수들
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
     private lateinit var bleController: BleController
+    private var isScanning = false
 
     // WebView 관련 변수들
     private lateinit var webView: WebView
@@ -113,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.209:3000"
+        val url = "http://192.168.45.54:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
@@ -152,6 +153,11 @@ class MainActivity : AppCompatActivity() {
 
         // RecyclerView 초기화
         scanListAdapter.setupRecyclerView(recyclerScanList, this)
+
+        // View가 트리에 추가되었는지 확인하기 위한 로그 추가
+        Log.i(mainLogTag, "popupView: ${popupView.visibility}, " +
+                "recyclerScanList: ${recyclerScanList.visibility}, " +
+                "adapter: ${recyclerScanList.adapter}")
 
 //        debuggingButton = findViewById(R.id.debuggingButton)
 
@@ -246,8 +252,8 @@ class MainActivity : AppCompatActivity() {
         // Connect 버튼 클릭 리스너
         btnConnect.setOnClickListener {
             val selectedDevice = scanListAdapter.getSelectedDevice()
-            if (selectedDevice != null) {  // unknown Device 의 경우
-                connectToDeviceWithPermissionCheck(selectedDevice)
+            if (selectedDevice != null) {  // 아무 Radio Button 을 누르지 않은 경우
+                connectToDeviceWithPermissionCheck(selectedDevice,false)
                 // Connect 후 팝업창 종료 + Scan 종료
                 stopBleScanAndClearScanList()
             }
@@ -258,20 +264,26 @@ class MainActivity : AppCompatActivity() {
 
     // BLE Connect 권한 검사 메서드
     @SuppressLint("MissingPermission")
-    private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
+    private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice, isAutoConnection: Boolean) {
         if(bleController.requestBlePermission(this@MainActivity)){
             // 블루투스 권한이 이미 있는 경우
             bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
                     Log.i(mainLogTag, "${selectedDevice.name} 기기 연결 성공")
-                    webAppInterface.resConnect(DeviceInfo(
-                        macAddress = selectedDevice.address,
-                        deviceName = selectedDevice.name))
+                    if(isAutoConnection){
+                        webAppInterface.resAutoConnect(DeviceInfo(
+                            macAddress = selectedDevice.address,
+                            deviceType = selectedDevice.name))
+                    }else{
+                        webAppInterface.resConnect(DeviceInfo(
+                            macAddress = selectedDevice.address,
+                            deviceType = selectedDevice.name))
+                    }
                 } else {
                     Log.w(mainLogTag, "${selectedDevice.name} 기기 연결 끊어짐")
 //                    webAppInterface.resConnect(DeviceInfo(
 //                        macAddress = "",
-//                        deviceName = selectedDevice.name))
+//                        deviceType = selectedDevice.name))
                 }
             })
         }
@@ -321,38 +333,65 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.i(mainLogTag, "onDestroy")
-        bleController.disconnectAllDevices()
-        scanListAdapter.clearDevices()
-        stopBleScanAndClearScanList()
-        popupView.visibility = View.GONE
-    }
 
     override fun onPause() {
         super.onPause()
         Log.i(mainLogTag, "onPause")
-        stopBleScanAndClearScanList()
-        popupView.visibility = View.GONE
+        Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
+        if (isScanning) {  // 스캔 상태 확인
+            stopBleScanAndClearScanList()
+        }
+        isScanning = false  // 상태 강제 초기화
+        runOnUiThread {
+            popupView.visibility = View.GONE
+            popupContainer.visibility = View.GONE
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(mainLogTag, "onDestroy")
+        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
+        bleController.disconnectAllDevices()
+        scanListAdapter.clearDevices()
+        if (isScanning) {  // 스캔 상태 확인
+            stopBleScanAndClearScanList()
+        }
+        isScanning = false  // 상태 강제 초기화
+        runOnUiThread {
+            popupView.visibility = View.GONE
+            popupContainer.visibility = View.GONE
+        }
     }
 
     override fun onResume() {
         super.onResume()
         Log.i(mainLogTag, "onResume")
-
-        if (false) {  // TODO: 어느 조건일 때 자동으로 페어링 시킬지 고민해봐야함
-            bleController.startBleScan()
+        Toast.makeText(this,"onResume", Toast.LENGTH_SHORT).show()
+        if (true) {
             val pairedDevices = bleController.getParingDevices() ?: return
 
-            handler.postDelayed({
-                val scannedDevices = scanListAdapter.getDeviceList()
-                Log.i(mainLogTag, "pairedDevices  : ${pairedDevices}")
-                Log.i(mainLogTag, "scannedDevices : ${scannedDevices}")
+            // 페어링된 기기가 있는 경우
+            if (pairedDevices.isNotEmpty()) {
+                Log.i(mainLogTag, "페어링된 기기 발견: ${pairedDevices}")
+                // 바로 연결 시도
                 for (pairedDevice in pairedDevices) {
-                    connectToDeviceWithPermissionCheck(pairedDevice)
+                    connectToDeviceWithPermissionCheck(pairedDevice, true)
                 }
-            }, 3000) // 5000 밀리초 = 5초
+            } else {
+                Log.i(mainLogTag, "페어링된 기기 없음")
+                // 필요한 경우 여기서 다른 처리
+            }
+
+//            handler.postDelayed({
+//                val scannedDevices = scanListAdapter.getDeviceList()
+//                Log.i(mainLogTag, "pairedDevices  : ${pairedDevices}")
+//                Log.i(mainLogTag, "scannedDevices : ${scannedDevices}")
+//                for (pairedDevice in pairedDevices) {
+//                    connectToDeviceWithPermissionCheck(pairedDevice, true)
+//                }
+//                bleController.stopBleScan()
+//            }, 3000)
         }
     }
 
@@ -367,32 +406,156 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+//    fun startBleScan() {
+//        try {
+//            bleController.bleScanPopup()
+//        } catch (e: Exception) {
+//            Log.e(mainLogTag, "Failed to start BLE scan: ${e.message}")
+//        } finally {
+//            popupView.visibility = View.VISIBLE
+//            popupContainer.visibility = View.VISIBLE
+//            Log.i(mainLogTag, "------------------------------------------------" +
+//                    "START startBleScan 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
+//                    "------------------------------------------------")
+//        }
+//    }
+//    fun startBleScan() {
+//        if (isScanning) {
+//            Log.w(mainLogTag, "Scan already in progress")
+//            return
+//        }
+//
+//        try {
+//            bleController.bleScanPopup()
+//        } catch (e: Exception) {
+//            Log.e(mainLogTag, "Failed to start BLE scan: ${e.message}")
+//            isScanning = false
+//        } finally {
+//            isScanning = true
+//            runOnUiThread {
+//                popupView.visibility = View.VISIBLE
+//                popupContainer.visibility = View.VISIBLE
+//            }
+//            Log.i(mainLogTag, "------------------------------------------------" +
+//                    "START startBleScan 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
+//                    "------------------------------------------------")
+//        }
+//    }
+
     fun startBleScan() {
-        try {
-            bleController.bleScanPopup()
-            popupView.visibility = View.VISIBLE
-            popupContainer.visibility = View.VISIBLE
-        } catch (e: Exception) {
-            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
+        if (isScanning) {
+            Log.w(mainLogTag, "Scan already in progress")
+            return
+        }
+
+        runOnUiThread {
+            try {
+                // UI 변경
+                popupView.visibility = View.VISIBLE
+                popupContainer.visibility = View.VISIBLE
+
+                // UI 변경 후 즉시 상태 확인
+                if (popupView.visibility == View.VISIBLE &&
+                    popupContainer.visibility == View.VISIBLE) {
+                    // UI가 정상적으로 변경된 것을 확인한 후 스캔 시작
+                    bleController.bleScanPopup()
+                    isScanning = true
+                }
+            } catch (e: Exception) {
+                Log.e(mainLogTag, "Failed to start BLE scan: ${e.message}")
+                isScanning = false
+                popupView.visibility = View.GONE
+                popupContainer.visibility = View.GONE
+            }
         }
     }
 
+
+//    fun stopBleScanAndClearScanList() {
+//        try {
+//            bleController.stopBleScan()
+//            if (scanListAdapter.getDeviceList().isNotEmpty()) {
+//                scanListAdapter.clearDevices() // 데이터가 있을 때만 초기화
+//            }
+//        } catch (e: Exception) {
+//            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
+//        } finally {
+//            popupView.visibility = View.GONE // 팝업 숨김
+//            popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
+//            Log.i(mainLogTag, "------------------------------------------------" +
+//                    "STOP stopBleScanAndClearScanList 호출 및 popupView 상태: ${popupView.visibility}" +
+//                    "------------------------------------------------")
+//        }
+//    }
+//    fun stopBleScanAndClearScanList() {
+//        if (!isScanning) {
+//            Log.w(mainLogTag, "No scan in progress")
+//            return
+//        }
+//
+//        try {
+//            bleController.stopBleScan()
+//            if (scanListAdapter.getDeviceList().isNotEmpty()) {
+//                scanListAdapter.clearDevices()
+//            }
+//        } catch (e: Exception) {
+//            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
+//        } finally {
+//            isScanning = false
+//            runOnUiThread {
+//                popupView.visibility = View.GONE
+//                popupContainer.visibility = View.GONE
+//            }
+//            Log.i(mainLogTag, "------------------------------------------------" +
+//            "STOP stopBleScanAndClearScanList 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
+//            "------------------------------------------------")
+//        }
+//    }
+
     fun stopBleScanAndClearScanList() {
-        try {
-            bleController.stopBleScan()
-            popupView.visibility = View.GONE // 팝업 숨김
-            popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
-            scanListAdapter.clearDevices()
-        } catch (e: Exception) {
-            Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
+        if (!isScanning) {
+            Log.w(mainLogTag, "No scan in progress")
+            return
+        }
+
+        runOnUiThread {
+            try {
+                // 스캔 중지 및 리스트 클리어
+                bleController.stopBleScan()
+                if (scanListAdapter.getDeviceList().isNotEmpty()) {
+                    scanListAdapter.clearDevices()
+                }
+
+                // UI 변경
+                popupView.visibility = View.GONE
+                popupContainer.visibility = View.GONE
+                isScanning = false
+
+            } catch (e: Exception) {
+                Log.e(mainLogTag, "Failed to stop BLE scan: ${e.message}")
+            } finally {
+                Log.i(mainLogTag, "------------------------------------------------" +
+                        "STOP stopBleScanAndClearScanList 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
+                        "------------------------------------------------")
+            }
         }
     }
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
+//            val device = result.device
+//            val deviceName = result.scanRecord?.deviceName ?: "Unknown Device"
+//            scanListAdapter.addDeviceToAdapt(device)
+
+            // TODO: Unknown Device 를 ScanList 에 포함 하지 않는 코드 사용 여부 결정 필요
             val device = result.device
             if (result.scanRecord?.deviceName == null){
-                // DeviceName 이 Null 인 경우, 스캔리스트에 추가 X
+                // deviceName 이 Null 인 경우, 스캔리스트에 추가 X
+                return
+//            if (result.scanRecord?.deviceName == null){
+//                // DeviceName 이 Null 인 경우, 스캔리스트에 추가 X
+//                return
+            }else if (result.scanRecord?.deviceName == "Unknown Device"){
                 return
             }else{
                 scanListAdapter.addDeviceToAdapt(device)

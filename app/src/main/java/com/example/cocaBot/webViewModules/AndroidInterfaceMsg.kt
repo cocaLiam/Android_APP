@@ -4,7 +4,7 @@ import org.json.JSONObject
 
 data class DeviceInfo(
     var macAddress: String = "",
-    var deviceName: String = ""
+    var deviceType: String = ""
 )
 
 data class DeviceList(

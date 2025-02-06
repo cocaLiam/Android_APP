@@ -49,7 +49,8 @@ class HybridAppBridge(
     private val bridgeLogTag = " - HybridAppBridge"
     fun initializeWebView() {
         val webSettings: WebSettings = webView.settings
-        webSettings.javaScriptEnabled = true // JavaScript 활성화
+        webSettings.javaScriptEnabled = true // JavaScript 활성화 1
+        webSettings.setJavaScriptEnabled(true); // JavaScript 활성화 2
         webSettings.domStorageEnabled = true // DOM storage 활성화 // 로컬 스토리지 사용( Token 때문에 필요함 )
         webSettings.allowFileAccess = true // 파일 접근 허용
         webSettings.allowContentAccess = true

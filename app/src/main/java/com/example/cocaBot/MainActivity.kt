@@ -114,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.54:3000"
+        val url = "http://192.168.45.101:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
@@ -269,11 +269,12 @@ class MainActivity : AppCompatActivity() {
             // 블루투스 권한이 이미 있는 경우
             bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
-                    Log.i(mainLogTag, "${selectedDevice.name} 기기 연결 성공")
+                     Log.i(mainLogTag, "${selectedDevice.name} 기기 연결 성공")
                     if(isAutoConnection){
-                        webAppInterface.resAutoConnect(DeviceInfo(
-                            macAddress = selectedDevice.address,
-                            deviceType = selectedDevice.name))
+//                        webAppInterface.resAutoConnect(DeviceInfo(
+//                            macAddress = selectedDevice.address,
+//                            deviceType = selectedDevice.name))
+                        webAppInterface.reqConnectedDevices()
                     }else{
                         webAppInterface.resConnect(DeviceInfo(
                             macAddress = selectedDevice.address,
@@ -368,6 +369,9 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         Log.i(mainLogTag, "onResume")
         Toast.makeText(this,"onResume", Toast.LENGTH_SHORT).show()
+
+//        webView.reload()
+
         if (true) {
             val pairedDevices = bleController.getParingDevices() ?: return
 
@@ -382,16 +386,6 @@ class MainActivity : AppCompatActivity() {
                 Log.i(mainLogTag, "페어링된 기기 없음")
                 // 필요한 경우 여기서 다른 처리
             }
-
-//            handler.postDelayed({
-//                val scannedDevices = scanListAdapter.getDeviceList()
-//                Log.i(mainLogTag, "pairedDevices  : ${pairedDevices}")
-//                Log.i(mainLogTag, "scannedDevices : ${scannedDevices}")
-//                for (pairedDevice in pairedDevices) {
-//                    connectToDeviceWithPermissionCheck(pairedDevice, true)
-//                }
-//                bleController.stopBleScan()
-//            }, 3000)
         }
     }
 

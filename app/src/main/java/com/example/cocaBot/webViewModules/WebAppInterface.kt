@@ -2,6 +2,7 @@ package com.example.cocaBot.webViewModules
 // Android 기본 패키지
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Looper
 
 // UI Pack
 import android.webkit.JavascriptInterface
@@ -160,7 +161,7 @@ class WebAppInterface private constructor(
     fun reqConnectedDevices() {
         Log.i(webAppInterFaceTag,"reqConnectedDevices UP")
         val bleDeviceList = bleController.getConnectedDevices()
-        Log.i(webAppInterFaceTag,"bleDeviceList $bleDeviceList")
+        Log.i(webAppInterFaceTag,"bleDeviceList : $bleDeviceList")
         val deviceInfoList = mutableListOf<DeviceInfo>()
 
         if (bleDeviceList.isEmpty()){
@@ -175,7 +176,6 @@ class WebAppInterface private constructor(
             )
             deviceInfoList.add(deviceInfo)
         }
-
         resConnectedDevices(DeviceList(deviceList = deviceInfoList))
 
         Log.i(webAppInterFaceTag,"reqConnectedDevices Down")
@@ -196,6 +196,15 @@ class WebAppInterface private constructor(
             Log.e(webAppInterFaceTag, "reqReadData JSON 변환 중 오류 발생: ${e.message}")
         }
         Log.i(webAppInterFaceTag, "reqReadData Down")
+    }
+
+    @JavascriptInterface
+    fun pubReloadWebView() {
+        Log.i(webAppInterFaceTag, "pubReloadWebView UP")
+        webViewRef.get()?.post {
+            webViewRef.get()?.reload() // WebView 새로고침 <- JS 에서 window에 등록한 Res 함수들 반영
+        }
+        Log.i(webAppInterFaceTag, "pubReloadWebView DOWN")
     }
 
     @JavascriptInterface
@@ -288,13 +297,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
             webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     fun resDisconnect(dataToSend: DeviceInfo) {
@@ -363,16 +379,29 @@ class WebAppInterface private constructor(
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
-        Log.i(webAppInterFaceTag, "$jsonObject");
+        Log.i(webAppInterFaceTag, "resConnectedDevices : $jsonObject");
+        Log.i(webAppInterFaceTag, "WebView 참조 상태 : ${webViewRef.get()}");
+//        Log.i(webAppInterFaceTag, "WebView 참조 상태 : ${webViewRef.get()?.progress}");
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        Log.d(webAppInterFaceTag, "Is UI Thread 1 : ${Looper.myLooper() == Looper.getMainLooper()}")
+
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Is UI Thread 2 : ${Looper.myLooper() == Looper.getMainLooper()}")
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
+
+        mainActivity.runOnUiThread {
+            Log.d(webAppInterFaceTag, "Is UI Thread 2 : ${Looper.myLooper() == Looper.getMainLooper()}")
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
             webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-
     }
 
     fun resReadData(dataToSend: ReadData) {

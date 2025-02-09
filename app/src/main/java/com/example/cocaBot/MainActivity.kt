@@ -114,7 +114,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.101:3000"
+        val url = "http://192.168.45.206:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
@@ -337,6 +337,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+
+        // 캐시를 삭제해야 화면에 UI 가 업데이트 됨
+        webView.clearCache(true)
+        webView.clearHistory()
+        Log.i(mainLogTag, "캐시 삭제")
+
         Log.i(mainLogTag, "onPause")
         Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
         if (isScanning) {  // 스캔 상태 확인
@@ -351,6 +357,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+
+        // 캐시를 삭제해야 화면에 UI 가 업데이트 됨
+        webView.clearCache(true)
+        webView.clearHistory()
+        Log.i(mainLogTag, "캐시 삭제")
+
         Log.i(mainLogTag, "onDestroy")
         Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
         bleController.disconnectAllDevices()
@@ -367,10 +379,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        webView.reload()
+        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
+        Log.i(mainLogTag, "웹뷰 리로드")
+
         Log.i(mainLogTag, "onResume")
         Toast.makeText(this,"onResume", Toast.LENGTH_SHORT).show()
-
-//        webView.reload()
 
         if (true) {
             val pairedDevices = bleController.getParingDevices() ?: return

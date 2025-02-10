@@ -29,16 +29,11 @@ import android.bluetooth.le.ScanCallback
 // WebView Pack
 
 // DataClass Pack
-import com.example.cocaBot.bleModules.PermissionStatus
-import com.example.cocaBot.bleModules.BleDeviceInfo
 
 // Util Pack
 import android.annotation.SuppressLint
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
-import com.example.cocaBot.webViewModules.DeviceInfo
-import com.example.cocaBot.webViewModules.ReadData
-import com.example.cocaBot.webViewModules.WebAppInterface
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.full.declaredFunctions
@@ -69,6 +64,7 @@ class BleController(private val context: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
+    var onRequestDataListner: ((receivedData: String, status: Int) -> Unit)? = null
     // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
     private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
 
@@ -444,42 +440,44 @@ class BleController(private val context: Context) {
             // 데이터를 성공적으로 읽었을 때 처리
             useToastOnSubThread("App 이 Read 요청")
             Log.i(logTagBleController, "App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음")
-            Log.i(logTagBleController, "수신된 데이터: $receivedData \n" +
-                    "status : $status")
-            if (status == BluetoothGatt.GATT_SUCCESS) {
-                // 읽은 데이터 가져오기
-                val data = receivedData
+            Log.i(logTagBleController, "수신된 데이터: $receivedData \n" + "status : $status")
 
-                // ByteArray를 문자열로 변환
-                val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
-                Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
+            // 읽은 데이터 가져오기
+            val data = receivedData
 
-                // UTF-8로 변환
-                val utf8String = String(data, Charsets.UTF_8)
-                Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
+            // ByteArray를 문자열로 변환
+            val byteArrayString = String(data) // 기본적으로 UTF-8로 변환
+            Log.i(logTagBleController, "수신된 데이터 (String): $byteArrayString")
+
+            // UTF-8로 변환
+            val utf8String = String(data, Charsets.UTF_8)
+            Log.i(logTagBleController, "수신된 데이터 (UTF-8): $utf8String")
 
 //                    // EUC-KR로 변환
 //                    val eucKrString = String(data, Charsets.EUC_KR)
 //                    Log.i(BLECONT_LOG_TAG, "수신된 데이터 (EUC-KR): $eucKrString")
 
-                // ASCII로 변환
-                val asciiString = String(data, Charsets.US_ASCII)
-                Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
+            // ASCII로 변환
+            val asciiString = String(data, Charsets.US_ASCII)
+            Log.i(logTagBleController, "수신된 데이터 (ASCII): $asciiString")
 
-                // Hexadecimal로 출력
-                val hexString = data.joinToString(" ") { String.format("%02X", it) }
-                Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
+            // Hexadecimal로 출력
+            val hexString = data.joinToString(" ") { String.format("%02X", it) }
+            Log.i(logTagBleController, "수신된 데이터 (Hex): $hexString")
 
-                // UI 스레드에서 Toast 표시
-                Log.i(logTagBleController,
-                    "(String) : $byteArrayString \n" +
-                         "(UTF-8)  : $utf8String \n" +
-                         "(ASCII)  : $asciiString \n" +
-                         "(Hex)    : $hexString \n"
-                )
-            } else {
-                Log.e(logTagBleController, "데이터 읽기 실패: $status")
-            }
+            // UI 스레드에서 Toast 표시
+            Log.i(logTagBleController,
+                "(String) : $byteArrayString \n" +
+                     "(UTF-8)  : $utf8String \n" +
+                     "(ASCII)  : $asciiString \n" +
+                     "(Hex)    : $hexString \n"
+            )
+//                {Status: 1(1:STOP / 2: Running), Battery: 100%}
+//                {Status: 0(1:STOP / 2: Running), Battery: 100%}
+            // Lambda 호출
+//                onRequestDataListner(receivedData, status)
+            onRequestDataListner?.invoke(byteArrayString, status)
+
         } else {
             // 에러 처리
             Log.e("BLE", "Characteristic Read Failed, status: $status")

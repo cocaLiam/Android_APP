@@ -1,50 +1,45 @@
 package com.example.cocaBot
 
 // Operator Pack
+
+// UI Pack
+
+// BLE Pack
+
+// WebView Pack
+
+// dataType Pack
+
+// Util Pack
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothDevice
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import androidx.appcompat.app.AppCompatActivity
-import androidx.activity.enableEdgeToEdge
-
-// UI Pack
-import androidx.recyclerview.widget.RecyclerView
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
+import android.webkit.WebView
 import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.Toast
-import android.content.Intent
-
-// BLE Pack
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanResult
-import com.example.cocaBot.bleModules.ScanListAdapter
-import com.example.cocaBot.bleModules.BleController
-
-// WebView Pack
-import android.webkit.WebView
-import com.example.cocaBot.webViewModules.HybridAppBridge
-import com.example.cocaBot.webViewModules.WebAppInterface
-
-// dataType Pack
-import com.example.cocaBot.webViewModules.DeviceInfo
-import com.example.cocaBot.webViewModules.DeviceList
-import com.example.cocaBot.webViewModules.ReadData
-import com.example.cocaBot.webViewModules.WriteData
-import com.example.cocaBot.webViewModules.JsonValidationResult
-import org.json.JSONObject
-
-// Util Pack
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
-import com.example.cocaBot.utils.LiveDataManager
+import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.Observer
-import android.util.Log
+import androidx.recyclerview.widget.RecyclerView
+import com.example.cocaBot.bleModules.BleController
+import com.example.cocaBot.bleModules.ScanListAdapter
+import com.example.cocaBot.utils.LiveDataManager
+import com.example.cocaBot.webViewModules.DeviceInfo
+import com.example.cocaBot.webViewModules.HybridAppBridge
+import com.example.cocaBot.webViewModules.WebAppInterface
 
 
 class MainActivity : AppCompatActivity() {
@@ -107,16 +102,20 @@ class MainActivity : AppCompatActivity() {
 // WebView 초기화 -----------------------------------------------------------------------------------
         webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
 
-        hybridAppBridge = HybridAppBridge(webView, bleController, this@MainActivity)
-        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
+        webAppInterface = WebAppInterface(webView, bleController, this@MainActivity)
+        hybridAppBridge = HybridAppBridge(webView, bleController, this@MainActivity, webAppInterface)
+//        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
 
         // WebView 설정
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.206:3000"
+        val url = "http://192.168.45.193:3000?timestamp=${System.currentTimeMillis()}"
+//        val url = "http://192.168.45.193:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
+
+        WebView.setWebContentsDebuggingEnabled(true)
 
         // 캐시가 남아 있으면
         webView.clearCache(true)
@@ -338,10 +337,10 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
 
-        // 캐시를 삭제해야 화면에 UI 가 업데이트 됨
-        webView.clearCache(true)
-        webView.clearHistory()
-        Log.i(mainLogTag, "캐시 삭제")
+//        // 캐시를 삭제해야 화면에 UI 가 업데이트 됨
+//        webView.clearCache(true)
+//        webView.clearHistory()
+//        Log.i(mainLogTag, "캐시 삭제")
 
         Log.i(mainLogTag, "onPause")
         Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
@@ -353,16 +352,14 @@ class MainActivity : AppCompatActivity() {
             popupView.visibility = View.GONE
             popupContainer.visibility = View.GONE
         }
+
+        // TODO: 김쿤네 회사 onPause 작업 List
+//        //BroadcastReceiver
+//        unregisterReceiver(completeReceiver);
     }
 
     override fun onDestroy() {
         super.onDestroy()
-
-        // 캐시를 삭제해야 화면에 UI 가 업데이트 됨
-        webView.clearCache(true)
-        webView.clearHistory()
-        Log.i(mainLogTag, "캐시 삭제")
-
         Log.i(mainLogTag, "onDestroy")
         Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
         bleController.disconnectAllDevices()
@@ -375,13 +372,39 @@ class MainActivity : AppCompatActivity() {
             popupView.visibility = View.GONE
             popupContainer.visibility = View.GONE
         }
+
+
+
+        webView.clearHistory();
+        // NOTE: clears RAM cache, if you pass true, it will also clear the disk cache.
+        // Probably not a great idea to pass true if you have other WebViews still alive.
+        webView.clearCache(true);
+
+        // Loading a blank page is optional, but will ensure that the WebView isn't doing anything when you destroy it.
+        webView.loadUrl("about:blank");
+
+        webView.onPause();
+        webView.removeAllViews();
+        webView.destroyDrawingCache();
+
+        // NOTE: This pauses JavaScript execution for ALL WebViews,
+        // do not use if you have other WebViews still alive.
+        // If you create another WebView after calling this,
+        // make sure to call mWebView.resumeTimers().
+        webView.pauseTimers();
+
+        // NOTE: This can occasionally cause a segfault below API 17 (4.2)
+        webView.destroy();
+
+//        // Null out the reference so that you don't end up re-using it.
+//        webView = null;
+
+        Log.i(mainLogTag, "캐시 삭제")
+
     }
 
     override fun onResume() {
         super.onResume()
-        webView.reload()
-        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
-        Log.i(mainLogTag, "웹뷰 리로드")
 
         Log.i(mainLogTag, "onResume")
         Toast.makeText(this,"onResume", Toast.LENGTH_SHORT).show()
@@ -401,6 +424,48 @@ class MainActivity : AppCompatActivity() {
                 // 필요한 경우 여기서 다른 처리
             }
         }
+
+        webView.reload()
+        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
+        Log.i(mainLogTag, "웹뷰 리로드")
+
+        // TODO: 김쿤네 회사 onResume 작업 List
+//        // 24 11 12
+//        // 앱이 포그라운드로 돌아올 때마다 디버거 연결 여부 확인
+//        // 운영 환경에서만 안티-디버깅 체크
+//        if (BuildConfig.FLAVOR.equals("prod") && isDebuggerConnected()) {
+//            Log.w("Security", "onResume에서 디버거가 감지되었습니다! 프로세스를 종료합니다.")
+//            Process.killProcess(Process.myPid())
+//        }
+//
+//        if (BuildConfig.FLAVOR.equals("prod")) {
+//            val appUpdateManager: AppUpdateManager =
+//                AppUpdateManagerFactory.create(this@MainActivity)
+//
+//            appUpdateManager.getAppUpdateInfo()
+//                .addOnSuccessListener(object : OnSuccessListener<AppUpdateInfo?>() {
+//                    override fun onSuccess(appUpdateInfo: AppUpdateInfo) {
+//                        if (appUpdateInfo.updateAvailability() === UpdateAvailability.DEVELOPER_TRIGGERED_UPDATE_IN_PROGRESS) {
+//                            try {
+//                                appUpdateManager.startUpdateFlowForResult(
+//                                    appUpdateInfo, AppUpdateType.IMMEDIATE,
+//                                    this@MainActivity, _MY_REQUEST_CODE
+//                                )
+//                            } catch (e: SendIntentException) {
+//                                e.printStackTrace()
+//                            }
+//                        }
+//                    }
+//                })
+//        }
+//        val completeFilter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+//            registerReceiver(completeReceiver, completeFilter, RECEIVER_NOT_EXPORTED)
+//        } else {
+//            registerReceiver(completeReceiver, completeFilter)
+//        }
+
+
     }
 
     /**
@@ -412,43 +477,28 @@ class MainActivity : AppCompatActivity() {
         } else {
             super.onBackPressed()
         }
-    }
 
-//    fun startBleScan() {
-//        try {
-//            bleController.bleScanPopup()
-//        } catch (e: Exception) {
-//            Log.e(mainLogTag, "Failed to start BLE scan: ${e.message}")
-//        } finally {
-//            popupView.visibility = View.VISIBLE
-//            popupContainer.visibility = View.VISIBLE
-//            Log.i(mainLogTag, "------------------------------------------------" +
-//                    "START startBleScan 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
-//                    "------------------------------------------------")
-//        }
-//    }
-//    fun startBleScan() {
-//        if (isScanning) {
-//            Log.w(mainLogTag, "Scan already in progress")
-//            return
-//        }
+        // TODO: 김쿤네 회사 onBackPressed 작업 List
+//        if (_popupList.size() !== 0) {
+//            val popup: WebView = _popupList.get(_listSortNum)
 //
-//        try {
-//            bleController.bleScanPopup()
-//        } catch (e: Exception) {
-//            Log.e(mainLogTag, "Failed to start BLE scan: ${e.message}")
-//            isScanning = false
-//        } finally {
-//            isScanning = true
-//            runOnUiThread {
-//                popupView.visibility = View.VISIBLE
-//                popupContainer.visibility = View.VISIBLE
+//            if (_locationCaseUrl != null) {
+//                if (popup.url.equals(_locationCaseUrl, ignoreCase = true)) {
+//                    popup.loadUrl("javascript:window.webViewBackCase()")
+//                }
+//            } else if (popup.canGoBack()) {
+//                popup.goBack()
+//            } else {
+//                popup.loadUrl("javascript:window.close()")
 //            }
-//            Log.i(mainLogTag, "------------------------------------------------" +
-//                    "START startBleScan 호출 및 popupView 상태: ${popupView.visibility}, ${popupContainer.visibility}" +
-//                    "------------------------------------------------")
+//        } else if (_popupList.size() === 0) {
+//            if (_webView.canGoBack()) {
+//                _webView.goBack()
+//            } else {
+//                _webView.loadUrl("javascript:requestHwBack()")
+//            }
 //        }
-//    }
+    }
 
     fun startBleScan() {
         if (isScanning) {

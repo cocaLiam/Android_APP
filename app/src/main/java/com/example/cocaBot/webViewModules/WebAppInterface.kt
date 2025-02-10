@@ -9,9 +9,11 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.widget.Toast
 import android.util.Log
+import androidx.core.view.get
 
 // BLE Pack
 import com.example.cocaBot.bleModules.BleController
+import android.bluetooth.BluetoothGatt
 
 // WebView Pack
 import com.example.cocaBot.webViewModules.WebAppInterface
@@ -34,39 +36,72 @@ import kotlin.reflect.KProperty1
 // Custom Package
 import com.example.cocaBot.MainActivity
 
-class WebAppInterface private constructor(
-    webView: WebView,
+//class WebAppInterface private constructor(
+//    webView: WebView,
+//    private val bleController: BleController,
+//    private val mainActivity: MainActivity,
+//) {
+//    private val webAppInterFaceTag = " - WebAppInterface"
+//    private val webViewRef = WeakReference(webView) // WebView를 WeakReference로 감싸기
+////    private val context = WeakReference(context)
+//
+//    companion object {
+//        @Volatile
+//        private var instance: WebAppInterface? = null
+//
+//        fun initialize(
+//            webView: WebView,
+//            bleController: BleController,
+//            mainActivity: MainActivity,
+//        ): WebAppInterface {
+//            if (instance == null) {
+//                synchronized(this) {
+//                    if (instance == null) {
+//                        instance = WebAppInterface(webView, bleController, mainActivity)
+//                    }
+//                }
+//            }
+//            return instance!!
+//        }
+//
+//        fun getInstance(): WebAppInterface {
+//            return instance
+//                ?: throw IllegalStateException("WebAppInterface is not initialized, call initialize() method first.")
+//        }
+//    }
+class WebAppInterface(
+    private val webView: WebView,
     private val bleController: BleController,
     private val mainActivity: MainActivity,
 ) {
     private val webAppInterFaceTag = " - WebAppInterface"
-    private val webViewRef = WeakReference(webView) // WebView를 WeakReference로 감싸기
+//    private val webViewRef = WeakReference(webView) // WebView를 WeakReference로 감싸기
 //    private val context = WeakReference(context)
 
-    companion object {
-        @Volatile
-        private var instance: WebAppInterface? = null
-
-        fun initialize(
-            webView: WebView,
-            bleController: BleController,
-            mainActivity: MainActivity,
-        ): WebAppInterface {
-            if (instance == null) {
-                synchronized(this) {
-                    if (instance == null) {
-                        instance = WebAppInterface(webView, bleController, mainActivity)
-                    }
-                }
-            }
-            return instance!!
-        }
-
-        fun getInstance(): WebAppInterface {
-            return instance
-                ?: throw IllegalStateException("WebAppInterface is not initialized, call initialize() method first.")
-        }
-    }
+//    companion object {
+//        @Volatile
+//        private var instance: WebAppInterface? = null
+//
+//        fun initialize(
+//            webView: WebView,
+//            bleController: BleController,
+//            mainActivity: MainActivity,
+//        ): WebAppInterface {
+//            if (instance == null) {
+//                synchronized(this) {
+//                    if (instance == null) {
+//                        instance = WebAppInterface(webView, bleController, mainActivity)
+//                    }
+//                }
+//            }
+//            return instance!!
+//        }
+//
+//        fun getInstance(): WebAppInterface {
+//            return instance
+//                ?: throw IllegalStateException("WebAppInterface is not initialized, call initialize() method first.")
+//        }
+//    }
 
 /**
 ====================================================================================================
@@ -192,6 +227,23 @@ class WebAppInterface private constructor(
             // BLE Controller에서 데이터 읽기 요청
             bleController.requestReadData(deviceInfo.macAddress)
 
+            // Lambda로 데이터 처리를 설정
+            bleController.onRequestDataListner = { byteArrayString, status ->
+                if (status == BluetoothGatt.GATT_SUCCESS) {
+                    Log.d("LambdaHandler", "Lambda 처리된 데이터: ${byteArrayString}")
+                    resReadData(ReadData(
+                        deviceInfo=DeviceInfo(
+                            macAddress=deviceInfo.macAddress, deviceType=deviceInfo.deviceType),
+                            mapOf("readData" to byteArrayString)
+                    ))
+                }else{
+                    resReadData(ReadData(
+                        deviceInfo=DeviceInfo(
+                            macAddress=deviceInfo.macAddress, deviceType=deviceInfo.deviceType),
+                            mapOf("readData" to "GATT_FAIL")
+                    ))
+                }
+            }
         } catch (e: Exception) {
             Log.e(webAppInterFaceTag, "reqReadData JSON 변환 중 오류 발생: ${e.message}")
         }
@@ -201,9 +253,12 @@ class WebAppInterface private constructor(
     @JavascriptInterface
     fun pubReloadWebView() {
         Log.i(webAppInterFaceTag, "pubReloadWebView UP")
-        webViewRef.get()?.post {
-            webViewRef.get()?.reload() // WebView 새로고침 <- JS 에서 window에 등록한 Res 함수들 반영
+        mainActivity.runOnUiThread {
+            webView.reload() // WebView 새로고침 <- JS 에서 window에 등록한 Res 함수들 반영
         }
+//        webViewRef.get()?.post {
+//            webViewRef.get()?.reload() // WebView 새로고침 <- JS 에서 window에 등록한 Res 함수들 반영
+//        }
         Log.i(webAppInterFaceTag, "pubReloadWebView DOWN")
     }
 
@@ -278,13 +333,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     fun resAutoConnect(dataToSend: DeviceInfo) {
@@ -299,7 +361,7 @@ class WebAppInterface private constructor(
         // WebView를 통해 JavaScript 함수 호출
         mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
@@ -323,13 +385,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     fun resRemoveParing(dataToSend: DeviceInfo) {
@@ -342,13 +411,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     fun resParingInfo(dataToSend: DeviceList) {
@@ -361,13 +437,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     fun resConnectedDevices(dataToSend: DeviceList) {
@@ -379,12 +462,13 @@ class WebAppInterface private constructor(
         // 현재 함수 이름 가져오기
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
-        Log.i(webAppInterFaceTag, "resConnectedDevices : $jsonObject");
-        Log.i(webAppInterFaceTag, "WebView 참조 상태 : ${webViewRef.get()}");
-//        Log.i(webAppInterFaceTag, "WebView 참조 상태 : ${webViewRef.get()?.progress}");
-        // WebView를 통해 JavaScript 함수 호출
-        Log.d(webAppInterFaceTag, "Is UI Thread 1 : ${Looper.myLooper() == Looper.getMainLooper()}")
-
+        mainActivity.runOnUiThread {
+            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+            }
+        }
 //        webViewRef.get()?.post {
 //            Log.d(webAppInterFaceTag, "Is UI Thread 2 : ${Looper.myLooper() == Looper.getMainLooper()}")
 //            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
@@ -393,15 +477,6 @@ class WebAppInterface private constructor(
 //                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
 //            }
 //        }
-
-        mainActivity.runOnUiThread {
-            Log.d(webAppInterFaceTag, "Is UI Thread 2 : ${Looper.myLooper() == Looper.getMainLooper()}")
-            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
-            { result ->
-                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-            }
-        }
     }
 
     fun resReadData(dataToSend: ReadData) {
@@ -413,13 +488,20 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     // TODO : Observe 기능 이용해서 값이 바뀌면 자동으로 App -> Web 쏘는 기능
@@ -432,16 +514,25 @@ class WebAppInterface private constructor(
         val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
 
         // WebView를 통해 JavaScript 함수 호출
-        webViewRef.get()?.post {
+        mainActivity.runOnUiThread {
             // data class -> JSON 변환
             val jsonString = gson.toJson(dataToSend)
-
             Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonString)") // 디버깅 로그 추가
-            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonString)")
+            webView.evaluateJavascript("javascript:$functionName($jsonString)")
             { result ->
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
+//        webViewRef.get()?.post {
+//            // data class -> JSON 변환
+//            val jsonString = gson.toJson(dataToSend)
+//
+//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonString)") // 디버깅 로그 추가
+//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonString)")
+//            { result ->
+//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+//            }
+//        }
     }
 
     // JSON 객체 생성 로직

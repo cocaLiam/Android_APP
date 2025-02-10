@@ -38,7 +38,8 @@ import com.example.cocaBot.webViewModules.WebAppInterface
 class HybridAppBridge(
     private val webView: WebView,
     private val bleController: BleController,
-    private val mainActivity: MainActivity
+    private val mainActivity: MainActivity,
+    private val webAppInterface: WebAppInterface
 ) {
 
     /**
@@ -64,7 +65,7 @@ class HybridAppBridge(
         webView.webChromeClient = WebChromeClient()
 
         // WebView에 JavaScript 인터페이스 추가 [ 다른 webView 세팅이 끝나고 마지막에 해야함 ]
-        webView.addJavascriptInterface(WebAppInterface.getInstance(), "AndroidInterface")
+        webView.addJavascriptInterface(webAppInterface, "AndroidInterface")
     }
 
     /**

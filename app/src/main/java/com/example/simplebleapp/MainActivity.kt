@@ -42,7 +42,6 @@ class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
     private lateinit var enableBluetoothLauncher: ActivityResultLauncher<Intent>
     private val bleController = BleController(this) // MainActivity는 Context를 상속받음
-    val handler = Handler(Looper.getMainLooper())
 
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
     private var isPopupVisible = false
@@ -66,16 +65,41 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSendData: Button
     private lateinit var btnRequestReadData: Button
 
+    // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
+    private var handler: Handler? = null
+    private val autoConnectRunnable = Runnable {
+        val pairedDevices = bleController.getParingDevices() ?: return@Runnable
+        if (pairedDevices.isNotEmpty()) {
+            Log.i(MAIN_LOG_TAG, "페어링된 기기 발견: ${pairedDevices}")
+            // 바로 연결 시도
+            for (pairedDevice in pairedDevices) {
+                val conDeviceList = bleController.getConnectedDevices()
+//                if(!(pairedDevice in conDeviceList)){}
+                if (!conDeviceList.contains(pairedDevice)) {
+                    // 이미 연결되어 있다면 재연결 시도 X
+                    connectToDeviceWithPermissionCheck(pairedDevice)
+                }
+            }
+        } else {
+            Log.i(MAIN_LOG_TAG, "페어링된 기기 없음")
+            // 필요한 경우 여기서 다른 처리
+        }
+        Log.i(MAIN_LOG_TAG, "onResume END")
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
         setContentView(R.layout.activity_main)
 
 // BLE 초기화 완료 -----------------------------------------------------------------------------------
-        // 1. BluetoothManager 및 BluetoothAdapter 초기화
+        // 1. AutoConnect 지연용 Handler 객체 선언
+        handler = Handler(Looper.getMainLooper())
+
+        // 2. BluetoothManager 및 BluetoothAdapter 초기화
         bleController.setBleModules()
 
-        // 2_1. 권한요청 Launcher 등록
+        // 3. 권한요청 Launcher 등록
 //        registerForActivityResult 설명 >>
 //        Activity나 Fragment의 생명주기에 맞춰 실행되는 결과 처리 메커니즘을 제공하는 함수
 //        특정 작업(예: 권한 요청, 다른 Activity 호출 등)의 결과를 비동기적으로 처리하기 위해 사용됨
@@ -87,10 +111,10 @@ class MainActivity : AppCompatActivity() {
             }
         )
 
-        // 2_2. BLE 권한 요청 런처 BleController 에 전달
+        // 4. BLE 권한 요청 런처 BleController 에 전달
         bleController.setBlePermissionLauncher(enableBluetoothLauncher)
 
-        // 3. BLE 지원 여부 확인
+        // 5. BLE 지원 여부 확인
         bleController.checkBleOperator()
 
 // BLE 초기화 완료 -----------------------------------------------------------------------------------
@@ -291,12 +315,23 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(MAIN_LOG_TAG, "onDestroy")
+        Log.i(MAIN_LOG_TAG, "onDestroy START")
         Toast.makeText(this, "onDestroy", Toast.LENGTH_SHORT).show()
-        bleController.disconnectAllDevices()
+        Log.i(MAIN_LOG_TAG, "disconnectAllDevices BEFORE")
+        if(bleController.getConnectedDevices().size > 0){  // 연결 되있는 기기가 있을 떄만 처리
+            bleController.disconnectAllDevices()
+        }
+
+        // onResume 자동 연결 콜백 취소 처리 + Callback 메모리 해제 + handler 객체
+        handler?.removeCallbacks(autoConnectRunnable) // onResume 자동 연결 콜백 취소 처리
+        handler?.removeCallbacksAndMessages(null)
+        handler = null
+
+        Log.i(MAIN_LOG_TAG, "disconnectAllDevices AFTER")
         scanListAdapter.clearDevices()
         stopBleScanAndClearScanList()
         isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
+        Log.i(MAIN_LOG_TAG, "onDestroy END")
     }
 
     override fun onPause() {
@@ -309,45 +344,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
         super.onResume()
-        Log.i(MAIN_LOG_TAG, "onResume")
+        Log.i(MAIN_LOG_TAG, "onResume START")
         Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
-
-//        if (toggleBtnAutoConnect.isChecked) {
-//            bleController.startBleScan(scanCallback)
-//            val pairedDevices = bleController.getParingDevices() ?: return
-//
-//            handler.postDelayed({
-//                val scannedDevices = scanListAdapter.getDeviceList()
-//                Log.i(MAIN_LOG_TAG, "pairedDevices  : ${pairedDevices}")
-//                Log.i(MAIN_LOG_TAG, "scannedDevices : ${scannedDevices}")
-//                for (pairedDevice in pairedDevices) {
-//                    connectToDeviceWithPermissionCheck(pairedDevice)
-//                }
-//            }, 3000) // 5000 밀리초 = 5초
-//        }
 
         if (!(toggleBtnAutoConnect.isChecked)){
             return
         }
-        val pairedDevices = bleController.getParingDevices() ?: return
 
-        // 페어링된 기기가 있는 경우
-        if (pairedDevices.isNotEmpty()) {
-            Log.i(MAIN_LOG_TAG, "페어링된 기기 발견: ${pairedDevices}")
-            // 바로 연결 시도
-            for (pairedDevice in pairedDevices) {
-                val conDeviceList = bleController.getConnectedDevices()
-//                if(!(pairedDevice in conDeviceList)){}
-                if (!conDeviceList.contains(pairedDevice)) {
-                    // 이미 연결되어 있다면 재연결 시도 X
-                    connectToDeviceWithPermissionCheck(pairedDevice)
-                }
-            }
-        } else {
-            Log.i(MAIN_LOG_TAG, "페어링된 기기 없음")
-            // 필요한 경우 여기서 다른 처리
-        }
-
+        handler?.postDelayed(autoConnectRunnable, 1000)
     }
 
     private fun startBleScan() {

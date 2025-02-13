@@ -582,7 +582,7 @@ class BleController(private val applicationContext: Context) {
      * 모든 기기 연결 해제
      */
     fun disconnectAllDevices() {
-        Log.i(logTagBleController, "모든 기기 연결 해제 시도 : $bluetoothGattMap")
+        Log.i(logTagBleController, "모든 기기 연결 해제 시도 : ${bluetoothGattMap.keys()}")
 
         for ((key, deviceInfo) in bluetoothGattMap) {
             if (hasBluetoothConnectPermission()) {

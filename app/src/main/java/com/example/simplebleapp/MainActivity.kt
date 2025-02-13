@@ -65,7 +65,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRequestReadData: Button
 
     // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
-//    private var handler: Handler? = null
     private val handler = MyContextData.handler
     private val delayOnResumeCallback = Runnable {
         val pairedDevices = bleController.getParingDevices() ?: return@Runnable
@@ -86,19 +85,6 @@ class MainActivity : AppCompatActivity() {
         }
         Log.i(MAIN_LOG_TAG, "onResume END")
     }
-//    private val delayOnDestroyCallback = Runnable {
-//        // Callback 메모리 해제 + handler 객체
-//        bleController.disconnectAllDevices()
-//        handler.removeCallbacksAndMessages("onResume")
-//        handler.removeCallbacksAndMessages("onDestroy")
-////        handler = null
-//
-//        // BLE SCAN STOP + recycleView Clear
-//        scanListAdapter.clearDevices()
-//        stopBleScanAndClearScanList()
-//        Log.i(MAIN_LOG_TAG, "onDestroy END")
-//    }
-
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -339,20 +325,6 @@ class MainActivity : AppCompatActivity() {
 * */
         // onResume 자동 연결 콜백 취소 처리
         handler.removeCallbacks(delayOnResumeCallback)
-//        handler.removeCallbacksAndMessages("onResume")
-        // onDestroy 연결 유지 콜백
-//        handler.postDelayed(delayOnDestroyCallback, 1000)
-//        handler.postDelayed(delayOnDestroyCallback, "onDestroy", 2000)
-
-//        // Callback 메모리 해제 + handler 객체
-//        bleController.disconnectAllDevices()
-//        handler?.removeCallbacksAndMessages(null)
-//        handler = null
-//
-//        // BLE SCAN STOP + recycleView Clear
-//        scanListAdapter.clearDevices()
-//        stopBleScanAndClearScanList()
-//        Log.i(MAIN_LOG_TAG, "onDestroy END")
 
         // Callback 메모리 해제 + handler 객체
         bleController.disconnectAllDevices()

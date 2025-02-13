@@ -351,8 +351,6 @@ class BleController(private val applicationContext: Context) {
                         Log.e(logTagBleController, "읽기 특성이 읽기 권한을 지원하지 않습니다.")
                     }
 
-                    Log.d(logTagBleController," BleInfo : $bluetoothGattMap")
-
                     // Notification Subscribe 기능 사용 할 일이 없으므로 주석처리
 //                    // CCCD 설정 // Notification Subscribe
 //                    if (bleInfo.readCharacteristic != null) {
@@ -605,7 +603,7 @@ class BleController(private val applicationContext: Context) {
             }
         }
 
-        Log.i(logTagBleController, "모든 기기 연결 해제 결과 : $bluetoothGattMap")
+        Log.i(logTagBleController, "모든 기기 연결 해제 결과 : ${bluetoothGattMap.keys()}")
     }
 
     /**

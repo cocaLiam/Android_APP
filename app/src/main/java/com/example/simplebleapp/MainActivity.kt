@@ -4,8 +4,6 @@ package com.example.simplebleapp
 import android.bluetooth.BluetoothDevice
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import androidx.appcompat.app.AppCompatActivity
 
 // UI Pack
@@ -22,6 +20,7 @@ import android.content.Intent
 // BLE Pack
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.os.Build
 
 // dataType Pack
 
@@ -32,6 +31,7 @@ import android.widget.ToggleButton
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.Observer
 
 // Custom Package
@@ -44,7 +44,6 @@ class MainActivity : AppCompatActivity() {
     private val bleController = BleController(this) // MainActivity는 Context를 상속받음
 
     private var scanListAdapter: ScanListAdapter = ScanListAdapter()
-    private var isPopupVisible = false
 
     private val MAIN_LOG_TAG = " - MainActivity "
 
@@ -66,8 +65,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRequestReadData: Button
 
     // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
-    private var handler: Handler? = null
-    private val autoConnectRunnable = Runnable {
+//    private var handler: Handler? = null
+    private val handler = MyContextData.handler
+    private val delayOnResumeCallback = Runnable {
         val pairedDevices = bleController.getParingDevices() ?: return@Runnable
         if (pairedDevices.isNotEmpty()) {
             Log.i(MAIN_LOG_TAG, "페어링된 기기 발견: ${pairedDevices}")
@@ -86,6 +86,19 @@ class MainActivity : AppCompatActivity() {
         }
         Log.i(MAIN_LOG_TAG, "onResume END")
     }
+//    private val delayOnDestroyCallback = Runnable {
+//        // Callback 메모리 해제 + handler 객체
+//        bleController.disconnectAllDevices()
+//        handler.removeCallbacksAndMessages("onResume")
+//        handler.removeCallbacksAndMessages("onDestroy")
+////        handler = null
+//
+//        // BLE SCAN STOP + recycleView Clear
+//        scanListAdapter.clearDevices()
+//        stopBleScanAndClearScanList()
+//        Log.i(MAIN_LOG_TAG, "onDestroy END")
+//    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,8 +106,8 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
 // BLE 초기화 완료 -----------------------------------------------------------------------------------
-        // 1. AutoConnect 지연용 Handler 객체 선언
-        handler = Handler(Looper.getMainLooper())
+//        // 1. AutoConnect 지연용 Handler 객체 선언
+//        handler = Handler(Looper.getMainLooper())
 
         // 2. BluetoothManager 및 BluetoothAdapter 초기화
         bleController.setBleModules()
@@ -313,35 +326,52 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+//    @RequiresApi(Build.VERSION_CODES.P)
     override fun onDestroy() {
         super.onDestroy()
         Log.i(MAIN_LOG_TAG, "onDestroy START")
         Toast.makeText(this, "onDestroy", Toast.LENGTH_SHORT).show()
-        Log.i(MAIN_LOG_TAG, "disconnectAllDevices BEFORE")
-        if(bleController.getConnectedDevices().size > 0){  // 연결 되있는 기기가 있을 떄만 처리
-            bleController.disconnectAllDevices()
-        }
 
-        // onResume 자동 연결 콜백 취소 처리 + Callback 메모리 해제 + handler 객체
-        handler?.removeCallbacks(autoConnectRunnable) // onResume 자동 연결 콜백 취소 처리
-        handler?.removeCallbacksAndMessages(null)
-        handler = null
+/*
+* onResume -> onDestroy 시에는 onResume의 delayOnResumeCallback 지연 함수가 잘 취소가 되는데
+* onDestroy -> onResume시에는 onDestroy 의 delayOnDestroyCallback 지연 함수는 취소가 안됨
+* ( 이유 : onResume 하면서 delayOnDestroyCallback 의 참조가 새로 할당 되므로 )
+* */
+        // onResume 자동 연결 콜백 취소 처리
+        handler.removeCallbacks(delayOnResumeCallback)
+//        handler.removeCallbacksAndMessages("onResume")
+        // onDestroy 연결 유지 콜백
+//        handler.postDelayed(delayOnDestroyCallback, 1000)
+//        handler.postDelayed(delayOnDestroyCallback, "onDestroy", 2000)
 
-        Log.i(MAIN_LOG_TAG, "disconnectAllDevices AFTER")
+//        // Callback 메모리 해제 + handler 객체
+//        bleController.disconnectAllDevices()
+//        handler?.removeCallbacksAndMessages(null)
+//        handler = null
+//
+//        // BLE SCAN STOP + recycleView Clear
+//        scanListAdapter.clearDevices()
+//        stopBleScanAndClearScanList()
+//        Log.i(MAIN_LOG_TAG, "onDestroy END")
+
+        // Callback 메모리 해제 + handler 객체
+        bleController.disconnectAllDevices()
+        handler.removeCallbacksAndMessages(null)
+//        handler = null
+
+        // BLE SCAN STOP + recycleView Clear
         scanListAdapter.clearDevices()
         stopBleScanAndClearScanList()
-        isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
         Log.i(MAIN_LOG_TAG, "onDestroy END")
     }
 
     override fun onPause() {
         super.onPause()
         Log.i(MAIN_LOG_TAG, "onPause")
-//        Toast.makeText(this, "onPause", Toast.LENGTH_SHORT).show()
         stopBleScanAndClearScanList()
-        isPopupVisible = popupView.visibility == View.VISIBLE // 팝업 상태 저장
     }
 
+//    @RequiresApi(Build.VERSION_CODES.P)
     override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
         super.onResume()
         Log.i(MAIN_LOG_TAG, "onResume START")
@@ -351,7 +381,12 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        handler?.postDelayed(autoConnectRunnable, 1000)
+        // onDestroy 연결 유지 콜백 취소 처리
+//        handler.removeCallbacks(delayOnDestroyCallback)
+//        handler.removeCallbacksAndMessages("onDestroy")
+        // onResume 자동 연결 콜백
+        handler.postDelayed(delayOnResumeCallback, 2000)
+//        handler.postDelayed(delayOnResumeCallback,"onResume", 2000)
     }
 
     private fun startBleScan() {

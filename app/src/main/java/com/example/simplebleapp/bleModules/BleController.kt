@@ -34,6 +34,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
+import com.example.simplebleapp.MyContextData
 import java.lang.reflect.Method
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -86,7 +87,10 @@ class BleController(private val applicationContext: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
-    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
+//    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
+    // <application 단에서 다루는 Context Data ( 앱이 완전히 종료 되기 전까지 Data 를 보유함 )
+    private val bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> get()
+        = MyContextData.instance.bluetoothGattMap
 
     /**
      * BLE 모듈 초기화

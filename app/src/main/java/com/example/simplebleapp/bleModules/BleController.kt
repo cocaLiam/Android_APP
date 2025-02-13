@@ -259,6 +259,9 @@ class BleController(private val applicationContext: Context) {
                             // GATT 서버에 연결 성공
                             Log.d(logTagBleController, "GATT 서버에 연결되었습니다.")
 
+                            // GATT 전송 버퍼 크기 지정
+                            gatt.requestMtu(247)
+
                             val bleDeviceInfo = BleDeviceInfo()
                             bleDeviceInfo.device = device
                             bleDeviceInfo.deviceName = device.name
@@ -431,8 +434,8 @@ class BleController(private val applicationContext: Context) {
      */
     fun writeData(data: ByteArray, macAddress: String ) {
         try {
-            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw Exception("BleDeviceInfo 객체가 초기화되지 않았습니다.: $macAddress")
-            bleInfo.gatt ?: throw Exception("BluetoothGatt 객체가 초기화되지 않았습니다: $macAddress")
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw Exception("bluetoothGattMap 에 없는 Device 제어 불가 TargetMac : $macAddress, bluetoothGattMap : $bluetoothGattMap")
+            bleInfo.gatt ?: throw Exception("bluetoothGattMap 에 gatt 서버가 구성 되어 있지 않음 TargetMac : $macAddress, bluetoothGattMap : $bluetoothGattMap")
 
             if (hasBluetoothConnectPermission()) {
                 try {
@@ -465,13 +468,14 @@ class BleController(private val applicationContext: Context) {
      */
     fun requestReadData(macAddress: String) {
         try {
-            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw SecurityException("BleDeviceInfo 객체가 초기화되지 않았습니다.: $macAddress")
-            bleInfo.gatt ?: throw SecurityException("BluetoothGatt 객체가 초기화되지 않았습니다: $macAddress")
+            val bleInfo: BleDeviceInfo = bluetoothGattMap[macAddress] ?: throw SecurityException("bluetoothGattMap 에 없는 Device 제어 불가 TargetMac : $macAddress, bluetoothGattMap : $bluetoothGattMap")
+            bleInfo.gatt ?: throw SecurityException("bluetoothGattMap 에 gatt 서버가 구성 되어 있지 않음 TargetMac : $macAddress, bluetoothGattMap : $bluetoothGattMap")
 
             if (hasBluetoothConnectPermission()) {
                 try {
-                    useToastOnSubThread("Request Read Data 요청 $macAddress")
-                    Log.d(logTagBleController, "Request Read Data 요청 $macAddress")
+                    useToastOnSubThread("Request Read Data 요청 $readCharacteristicUuid // $macAddress")
+                    Log.d(logTagBleController, "" +
+                            "Request Read Data 요청 $macAddress")
                     val requestReadResult = bleInfo.gatt!!.readCharacteristic(bleInfo.readCharacteristic) // 읽기 요청
                     Log.d(logTagBleController, "READ Data 요청 결과 : $requestReadResult")
                 } catch (e: Exception) {

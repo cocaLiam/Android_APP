@@ -312,19 +312,42 @@ class MainActivity : AppCompatActivity() {
         Log.i(MAIN_LOG_TAG, "onResume")
         Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
 
-        if (toggleBtnAutoConnect.isChecked) {
-            bleController.startBleScan(scanCallback)
-            val pairedDevices = bleController.getParingDevices() ?: return
+//        if (toggleBtnAutoConnect.isChecked) {
+//            bleController.startBleScan(scanCallback)
+//            val pairedDevices = bleController.getParingDevices() ?: return
+//
+//            handler.postDelayed({
+//                val scannedDevices = scanListAdapter.getDeviceList()
+//                Log.i(MAIN_LOG_TAG, "pairedDevices  : ${pairedDevices}")
+//                Log.i(MAIN_LOG_TAG, "scannedDevices : ${scannedDevices}")
+//                for (pairedDevice in pairedDevices) {
+//                    connectToDeviceWithPermissionCheck(pairedDevice)
+//                }
+//            }, 3000) // 5000 밀리초 = 5초
+//        }
 
-            handler.postDelayed({
-                val scannedDevices = scanListAdapter.getDeviceList()
-                Log.i(MAIN_LOG_TAG, "pairedDevices  : ${pairedDevices}")
-                Log.i(MAIN_LOG_TAG, "scannedDevices : ${scannedDevices}")
-                for (pairedDevice in pairedDevices) {
+        if (!(toggleBtnAutoConnect.isChecked)){
+            return
+        }
+        val pairedDevices = bleController.getParingDevices() ?: return
+
+        // 페어링된 기기가 있는 경우
+        if (pairedDevices.isNotEmpty()) {
+            Log.i(MAIN_LOG_TAG, "페어링된 기기 발견: ${pairedDevices}")
+            // 바로 연결 시도
+            for (pairedDevice in pairedDevices) {
+                val conDeviceList = bleController.getConnectedDevices()
+//                if(!(pairedDevice in conDeviceList)){}
+                if (!conDeviceList.contains(pairedDevice)) {
+                    // 이미 연결되어 있다면 재연결 시도 X
                     connectToDeviceWithPermissionCheck(pairedDevice)
                 }
-            }, 3000) // 5000 밀리초 = 5초
+            }
+        } else {
+            Log.i(MAIN_LOG_TAG, "페어링된 기기 없음")
+            // 필요한 경우 여기서 다른 처리
         }
+
     }
 
     private fun startBleScan() {

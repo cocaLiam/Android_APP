@@ -60,6 +60,7 @@ class HybridAppBridge(
         webSettings.javaScriptCanOpenWindowsAutomatically = true // JavaScript로 새 창 열기 허용
         webSettings.cacheMode = WebSettings.LOAD_NO_CACHE
 
+
         // WebView 클라이언트 설정
         webView.webViewClient = CustomWebViewClient()
         webView.webChromeClient = WebChromeClient()

@@ -9,7 +9,7 @@ data class DeviceInfo(
 
 data class DeviceList(
     // deviceList = null 인 경우 , 아무 기기도 없음을 의미
-    val deviceList: MutableList<DeviceInfo>?
+    val deviceList: MutableList<DeviceInfo>
 )
 
 data class ReadData(

@@ -109,13 +109,38 @@ class WebAppInterface(
  * Web에서 App으로 데이터를 전달받는 인터페이스
  */
     @JavascriptInterface
-    fun reqConnect() {
-        Log.d(webAppInterFaceTag, "Web으로부터 reqConnect 요청 처리 UP")
+    fun reqScanStart() {
+        Log.i(webAppInterFaceTag,"reqScanStart UP")
         mainActivity.runOnUiThread {
-            mainActivity.stopBleScanAndClearScanList()
-            mainActivity.startBleScan()
+            mainActivity.reqBleScan()
         }
-    Log.d(webAppInterFaceTag, "Web으로부터 reqConnect 요청 처리 DOWN")
+        Log.i(webAppInterFaceTag,"reqScanStart DOWN")
+    }
+
+    @JavascriptInterface
+    fun reqScanStop() {
+        Log.i(webAppInterFaceTag,"reqScanStop UP")
+        mainActivity.runOnUiThread {
+            mainActivity.reqBleStop()
+        }
+        Log.i(webAppInterFaceTag,"reqScanStop DOWN")
+    }
+
+    @JavascriptInterface
+    fun reqConnect(jsonString: String) {
+        Log.i(webAppInterFaceTag,"reqConnect UP")
+        try {
+            Log.d("jsonString : ",jsonString)
+            // 전달된 JSON 문자열을 DeviceInfo 객체로 변환
+            val gson = Gson()
+            val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
+
+            mainActivity.connectToDeviceWithPermissionCheck(deviceInfo.macAddress,false)
+
+        } catch (e: Exception) {
+            Log.e(webAppInterFaceTag, "reqConnect JSON 변환 중 오류 발생: ${e.message}")
+        }
+        Log.i(webAppInterFaceTag,"reqConnect Down")
     }
 
     @JavascriptInterface
@@ -173,7 +198,7 @@ class WebAppInterface(
         val deviceInfoList = mutableListOf<DeviceInfo>()
 
         if (bleDeviceSet.isEmpty()){
-            resParingInfo(DeviceList(deviceList=null))
+            resParingInfo(DeviceList(mutableListOf<DeviceInfo>()))
             return
         }
 
@@ -200,7 +225,7 @@ class WebAppInterface(
         val deviceInfoList = mutableListOf<DeviceInfo>()
 
         if (bleDeviceList.isEmpty()){
-            resConnectedDevices(DeviceList(deviceList=null))
+            resConnectedDevices(DeviceList(mutableListOf<DeviceInfo>()))
             return
         }
 
@@ -218,32 +243,38 @@ class WebAppInterface(
 
     @JavascriptInterface
     fun reqReadData(jsonString: String) {
-        Log.i(webAppInterFaceTag, "reqReadData UP")
+        Log.i(webAppInterFaceTag, "reqReadData UP ${jsonString}")
         try {
             // 전달된 JSON 문자열을 DeviceInfo 객체로 변환
             val gson = Gson()
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
 
-            // BLE Controller에서 데이터 읽기 요청
-            bleController.requestReadData(deviceInfo.macAddress)
-
-            // Lambda로 데이터 처리를 설정
-            bleController.onRequestDataListner = { byteArrayString, status ->
+            // onCharacteristicRead 에서 호출될 Lamda 함수 등록
+            bleController.onRequestDataListner = { device, byteArrayString, status ->
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     Log.d("LambdaHandler", "Lambda 처리된 데이터: ${byteArrayString}")
+
                     resReadData(ReadData(
                         deviceInfo=DeviceInfo(
-                            macAddress=deviceInfo.macAddress, deviceType=deviceInfo.deviceType),
-                            mapOf("readData" to byteArrayString)
+                            macAddress=device.address, deviceType=device.name),
+                        mapOf("readData" to byteArrayString)
                     ))
+
                 }else{
                     resReadData(ReadData(
                         deviceInfo=DeviceInfo(
-                            macAddress=deviceInfo.macAddress, deviceType=deviceInfo.deviceType),
-                            mapOf("readData" to "GATT_FAIL")
+                            macAddress=device.address, deviceType=device.name),
+                        mapOf("readData" to "")
                     ))
                 }
             }
+
+            /*
+            * WEB ------reqReadData-------> APP --requestReadData-->
+            * 기기 --onCharacteristicRead--> APP --resReadData--> WEB
+            * */
+            bleController.requestReadData(deviceInfo.macAddress);
+
         } catch (e: Exception) {
             Log.e(webAppInterFaceTag, "reqReadData JSON 변환 중 오류 발생: ${e.message}")
         }
@@ -278,6 +309,7 @@ class WebAppInterface(
     @JavascriptInterface
     fun pubSendData(jsonString: String) {
         try {
+            Log.i(webAppInterFaceTag,"pubSendData UP")
             // 전달된 JSON 문자열을 로그로 출력
             Log.d(webAppInterFaceTag, "Received data: $jsonString")
 
@@ -286,16 +318,6 @@ class WebAppInterface(
 
             // JSON 문자열을 WriteData 객체로 변환
             val writeData: WriteData = gson.fromJson(jsonString, WriteData::class.java)
-            Log.d(webAppInterFaceTag, "Changed data: $writeData")
-
-            // WriteData 객체의 데이터 접근
-            Log.d(webAppInterFaceTag, "DeviceInfo - MAC Address: ${writeData.deviceInfo.macAddress}")
-            Log.d(webAppInterFaceTag, "DeviceInfo - Device Name: ${writeData.deviceInfo.deviceType}")
-            Log.d(webAppInterFaceTag, "Message 1: ${writeData.msg}")
-            Log.d(webAppInterFaceTag, "Type of writeData.msg: ${writeData.msg::class.java.name}")
-            Log.d(webAppInterFaceTag, "Message 2: ${writeData.msg.keys}")
-            Log.d(webAppInterFaceTag, "Message 3: ${writeData.msg.values}")
-            Log.d(webAppInterFaceTag, "Message 4: ${writeData.msg[writeData.msg.keys.firstOrNull()]}")
 
             // 필요 시 JSONObject로 변환
             val jsonObject = JSONObject(jsonString)
@@ -304,9 +326,8 @@ class WebAppInterface(
             val inputData = writeData.msg[writeData.msg.keys.firstOrNull()].toString()
             val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
             bleController.writeData(dataToSend,writeData.deviceInfo.macAddress)
-            //
 
-            Log.d(webAppInterFaceTag, "JSONObject: $jsonObject")
+            Log.i(webAppInterFaceTag,"pubSendData DOWN")
         } catch (e: JSONException) {
             e.printStackTrace()
             Log.e(webAppInterFaceTag, "Failed to parse JSON: " + e.message)
@@ -323,7 +344,9 @@ class WebAppInterface(
  * 1. Response 타입 : Web(req) --> App(res) --> Web
  * 2. Subscribe 타입 : App(publish) --> Web
  */
-    fun resConnect(dataToSend: DeviceInfo) {
+    fun resScanStart(dataToSend: DeviceList) {
+        Log.i(webAppInterFaceTag,"resScanStart UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -340,16 +363,56 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resScanStart DOWN")
+    }
+
+    fun resScanStop() {
+        Log.i(webAppInterFaceTag,"resScanStop UP")
+
+        val jsonObject = JSONObject()
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        mainActivity.runOnUiThread {
+            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+            }
+        }
+
+        Log.i(webAppInterFaceTag,"resScanStop DOWN")
+    }
+
+    fun resConnect(dataToSend: DeviceInfo) {
+        Log.i(webAppInterFaceTag,"resConnect UP")
+
+        val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
+        // JSON 객체 생성
+        val jsonObject = jsonValidationResult.jsonObject
+        jsonObject.put("resResult", jsonValidationResult.resResult)
+
+        // 현재 함수 이름 가져오기
+        val functionName = object {}.javaClass.enclosingMethod?.name ?: "unknownFunction"
+
+        // WebView를 통해 JavaScript 함수 호출
+        mainActivity.runOnUiThread {
+            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
+            webView.evaluateJavascript("javascript:$functionName(${jsonObject})")
+            { result ->
+                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
+            }
+        }
+
+        Log.i(webAppInterFaceTag,"resConnect DOWN")
     }
 
     fun resAutoConnect(dataToSend: DeviceInfo) {
+        Log.i(webAppInterFaceTag,"resAutoConnect UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -366,16 +429,13 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resAutoConnect DOWN")
     }
 
     fun resDisconnect(dataToSend: DeviceInfo) {
+        Log.i(webAppInterFaceTag,"resDisconnect UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -392,16 +452,13 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName(${jsonObject})")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resDisconnect DOWN")
     }
 
     fun resRemoveParing(dataToSend: DeviceInfo) {
+        Log.i(webAppInterFaceTag,"resRemoveParing UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -418,16 +475,13 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resRemoveParing DOWN")
     }
 
     fun resParingInfo(dataToSend: DeviceList) {
+        Log.i(webAppInterFaceTag,"resParingInfo UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -444,16 +498,13 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resParingInfo DOWN")
     }
 
     fun resConnectedDevices(dataToSend: DeviceList) {
+        Log.i(webAppInterFaceTag,"resConnectedDevices UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -469,17 +520,13 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Is UI Thread 2 : ${Looper.myLooper() == Looper.getMainLooper()}")
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resConnectedDevices DOWN")
     }
 
     fun resReadData(dataToSend: ReadData) {
+        Log.i(webAppInterFaceTag,"resReadData UP")
+
         val jsonValidationResult: JsonValidationResult = makeJsonMsgProcess(dataToSend)
         // JSON 객체 생성
         val jsonObject = jsonValidationResult.jsonObject
@@ -495,17 +542,14 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonObject)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonObject)")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"resReadData DOWN")
     }
 
     // TODO : Observe 기능 이용해서 값이 바뀌면 자동으로 App -> Web 쏘는 기능
     fun subObserveData(dataToSend: Map<String,String>){
+        Log.i(webAppInterFaceTag,"subObserveData UP")
+
         // 사용방법 : webAppInterface.subObserveData(mapOf("aa" to "bb"))
         // Gson 객체 생성
         val gson = Gson()
@@ -523,16 +567,8 @@ class WebAppInterface(
                 Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
             }
         }
-//        webViewRef.get()?.post {
-//            // data class -> JSON 변환
-//            val jsonString = gson.toJson(dataToSend)
-//
-//            Log.d(webAppInterFaceTag, "Call JS function: $functionName($jsonString)") // 디버깅 로그 추가
-//            webViewRef.get()?.evaluateJavascript("javascript:$functionName($jsonString)")
-//            { result ->
-//                Log.d(webAppInterFaceTag, "Result from JavaScript: $result")
-//            }
-//        }
+
+        Log.i(webAppInterFaceTag,"subObserveData DOWN")
     }
 
     // JSON 객체 생성 로직

@@ -122,7 +122,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.209:3000?timestamp=${System.currentTimeMillis()}"
+        val url = "http://192.168.45.76:3000?timestamp=${System.currentTimeMillis()}"
 //        val url = "http://192.168.45.193:3000"
 //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
@@ -255,9 +255,7 @@ class MainActivity : AppCompatActivity() {
                     // WEB 에서 reqConnectedDevices 호출로 화면 갱신
                     // <- 그대로 이용해서 AutoConnection 시 WEB UI 화면 갱신 용도
                     Log.i(mainLogTag,"isConnected : $isConnected")
-                    bleController.bluetoothAdapter.getRemoteDevice(targetDevice.address)
                     webAppInterface.reqConnectedDevices()
-
 //                        webAppInterface.resAutoConnect(DeviceInfo(
 //                            macAddress = selectedDevice.address,
 //                            deviceType = selectedDevice.name))

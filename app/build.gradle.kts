@@ -47,4 +47,6 @@ dependencies {
     implementation(libs.gson)                           // data class -> JSON 변환 LIB
     implementation(libs.androidx.security.crypto)       // LocalStorage 암호화 LIB
     implementation(libs.kotlin.reflect) // Kotlin Reflection LIB
+    implementation(libs.androidx.core.ktx)             // core-ktx 의존성 추가
+//    implementation "androidx.core:core-ktx:1.10.1"    // 추가된 의존성
 }

@@ -27,6 +27,10 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.updateLayoutParams
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import android.view.ViewGroup
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.Observer
@@ -114,6 +118,30 @@ class MainActivity : AppCompatActivity() {
 // WebView 초기화 -----------------------------------------------------------------------------------
         webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
 
+        // WindowInsetsListener를 설정하여 시스템 소프트키 영역 계산
+        ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
+            // WindowInsetsCompat로 시스템 제스처 영역 가져오기
+            val systemGestureInsets = insets.getInsets(WindowInsetsCompat.Type.systemGestures())
+            val softKeyHeight = systemGestureInsets.bottom // 소프트키 높이 가져오기
+
+            // WebView의 패딩 또는 마진을 조정 (bottom에 소프트키 높이 반영)
+            val params = view.layoutParams as ViewGroup.MarginLayoutParams
+            params.bottomMargin = softKeyHeight
+            view.layoutParams = params // 변경된 LayoutParams 적용
+
+            insets // 반환
+        }
+//        webView.setOnApplyWindowInsetsListener { view, insets ->
+//            val systemGestureInsets = insets.systemGestureInsets
+//            val softKeyHeight = systemGestureInsets.bottom // 소프트키 높이 가져오기
+//
+//            // WebView의 패딩 또는 마진을 조정 (bottom에 소프트키 높이 반영)
+//            view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+//                bottomMargin = softKeyHeight // WebView 높이 줄임
+//            }
+//            insets // 반환
+//        }
+
         webAppInterface = WebAppInterface(webView, bleController, this@MainActivity)
         hybridAppBridge = HybridAppBridge(webView, bleController, this@MainActivity, webAppInterface)
 //        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
@@ -145,10 +173,7 @@ class MainActivity : AppCompatActivity() {
 
 // UI 초기화 ---------------------------------------------------------------------------------------
         // activity_main.xml의 루트 레이아웃 가져오기
-        val rootLayout =
-            findViewById<LinearLayout>(R.id.root_layout) // activity_main.xml의 루트 레이아웃 ID
-
-//        debuggingButton = findViewById(R.id.debuggingButton)
+        val rootLayout = findViewById<LinearLayout>(R.id.root_layout) // activity_main.xml의 루트 레이아웃 ID
 
         // 팝업을 루트 레이아웃에 추가
         bleController.registerScanCallback(scanCallback)
@@ -181,13 +206,13 @@ class MainActivity : AppCompatActivity() {
         // APP 시작시 자동 실행하는 작업들
         Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
 
-        handler.postDelayed(delayOnResumeCallback, 2000)
+        handler.postDelayed(delayOnResumeCallback,  500)
     }
 
     override fun onResume() {
         super.onResume()
         Log.i(mainLogTag, "onResume START")
-        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+//        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
 
 //        webView.reload()  // 새로고침처럼됨
 //        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
@@ -213,6 +238,7 @@ class MainActivity : AppCompatActivity() {
         handler.removeCallbacks(delayOnResumeCallback)
 
         // Callback 메모리 해제 + handler 객체
+        Log.d(mainLogTag, "디버깅중 < 모든 기기 연결 해제 시도 11111 ")
         bleController.disconnectAllDevices()
         handler.removeCallbacksAndMessages(null)
 //        handler = null

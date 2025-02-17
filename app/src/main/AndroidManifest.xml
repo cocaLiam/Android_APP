@@ -40,6 +40,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
 
     <application
+        android:hardwareAccelerated="false"
         android:name=".MyContextData"
         android:allowBackup="true"
         android:usesCleartextTraffic="true"

@@ -12,13 +12,13 @@ data class PermissionStatus(
     var bluetoothConnectPermission: Boolean = false
 )
 
-data class BleDeviceInfo(
-    var device: BluetoothDevice? = null,
-    var deviceType: String? = null,
-    var gatt: BluetoothGatt? = null,
-    var writeCharacteristic: BluetoothGattCharacteristic? = null,
-    var readCharacteristic: BluetoothGattCharacteristic? = null
-)
+//data class BleDeviceInfo(
+//    var device: BluetoothDevice? = null,
+//    var deviceType: String? = null,
+//    var gatt: BluetoothGatt? = null,
+//    var writeCharacteristic: BluetoothGattCharacteristic? = null,
+//    var readCharacteristic: BluetoothGattCharacteristic? = null
+//)
 
 data class PushBotUuid(
     val serviceUuid            : String = "49535343-fe7d-4ae5-8fa9-9fafd205e455",

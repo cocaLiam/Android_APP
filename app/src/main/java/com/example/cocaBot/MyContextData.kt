@@ -4,7 +4,7 @@ import android.app.Application
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.example.cocaBot.bleModules.BleDeviceInfo
+//import com.example.cocaBot.bleModules.BleDeviceInfo
 import java.util.concurrent.ConcurrentHashMap
 
 class MyContextData : Application() {
@@ -14,7 +14,7 @@ class MyContextData : Application() {
         val handler = Handler(Looper.getMainLooper())  // 전역 handler 추가
     }
 
-    var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
+//    var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
 
     override fun onCreate() {
         super.onCreate()

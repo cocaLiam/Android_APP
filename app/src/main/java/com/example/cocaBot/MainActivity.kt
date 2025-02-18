@@ -17,6 +17,7 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.webkit.WebView
@@ -42,6 +43,14 @@ import com.example.cocaBot.webViewModules.HybridAppBridge
 import com.example.cocaBot.webViewModules.JsonValidationResult
 import com.example.cocaBot.webViewModules.WebAppInterface
 
+// 비동기 전용 라이브러리
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 
 class MainActivity : AppCompatActivity() {
     // BLE 관련 변수들
@@ -58,48 +67,44 @@ class MainActivity : AppCompatActivity() {
     private val _pageLoadComplete = MutableLiveData<Boolean>()
     private val pageLoadComplete: LiveData<Boolean> = _pageLoadComplete
 
+    // 비동기 작업을 위한 코루틴 스코프(코루틴 전용스레드 공간 정도) 선언
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
+
     // 기타 등등 변수들
     private val mainLogTag = " - MainActivity "
 
     // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
     private val handler = MyContextData.handler
-    private val delayOnResumeCallback = Runnable {
-        val pairedDevices = bleController.getParingDevices() ?: return@Runnable
-        if (pairedDevices.isNotEmpty()) {
-            Log.i(mainLogTag, "페어링된 기기 발견: ${pairedDevices}")
-            // 바로 연결 시도
-            for (pairedDevice in pairedDevices) {
-                val conDeviceList = bleController.getConnectedDevices()
-//                if(!(pairedDevice in conDeviceList)){}
-                if (!conDeviceList.contains(pairedDevice)) {
-                    // 이미 연결되어 있다면 재연결 시도 X
-                    connectToDeviceWithPermissionCheck(pairedDevice,true)
-                }
-            }
-        } else {
-            Log.i(mainLogTag, "페어링된 기기 없음")
-            // 필요한 경우 여기서 다른 처리
-        }
-        Log.i(mainLogTag, "onResume END")
-    }
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-
-        setContentView(R.layout.activity_main)
-
-        Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
-// BLE 초기화 ---------------------------------------------------------------------------------------
-        bleController = BleController(this) // MainActivity는 Context를 상속받음
+//    private val delayOnResumeCallback = Runnable {
+//        val pairedDevices = bleController.getParingDevices() ?: return@Runnable
+//        if (pairedDevices.isNotEmpty()) {
+//            Log.i(mainLogTag, "페어링된 기기 발견: ${pairedDevices}")
+//            // 바로 연결 시도
+//            for (pairedDevice in pairedDevices) {
+//                val conDeviceList = bleController.getConnectedDevices()
+////                if(!(pairedDevice in conDeviceList)){}
+//                if (!conDeviceList.contains(pairedDevice)) {
+//                    // 이미 연결되어 있다면 재연결 시도 X
+//                    connectToDeviceWithPermissionCheck(pairedDevice,true)
+//                }
+//            }
+//        } else {
+//            Log.i(mainLogTag, "페어링된 기기 없음")
+//            // 필요한 경우 여기서 다른 처리
+//        }
+//        Log.i(mainLogTag, "onResume END")
+//    }
+    private fun appCreate(){
+        // BLE 초기화 ---------------------------------------------------------------------------------------
+        bleController = BleController(this, coroutineScope) // MainActivity는 Context를 상속받음
 
         // 1. BluetoothManager 및 BluetoothAdapter 초기화
         bleController.setBleModules()
 
         // 2_1. 권한요청 Launcher 등록
-//        registerForActivityResult 설명 >>
-//        Activity나 Fragment의 생명주기에 맞춰 실행되는 결과 처리 메커니즘을 제공하는 함수
-//        특정 작업(예: 권한 요청, 다른 Activity 호출 등)의 결과를 비동기적으로 처리하기 위해 사용됨
+    //        registerForActivityResult 설명 >>
+    //        Activity나 Fragment의 생명주기에 맞춰 실행되는 결과 처리 메커니즘을 제공하는 함수
+    //        특정 작업(예: 권한 요청, 다른 Activity 호출 등)의 결과를 비동기적으로 처리하기 위해 사용됨
         enableBluetoothLauncher = registerForActivityResult(
             ActivityResultContracts.StartActivityForResult(),
             { result: ActivityResult ->
@@ -113,9 +118,9 @@ class MainActivity : AppCompatActivity() {
 
         // 3. BLE 지원 여부 확인
         bleController.checkBleOperator()
-// BLE 초기화 ---------------------------------------------------------------------------------------
+    // BLE 초기화 ---------------------------------------------------------------------------------------
 
-// WebView 초기화 -----------------------------------------------------------------------------------
+    // WebView 초기화 -----------------------------------------------------------------------------------
         webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
 
         // WindowInsetsListener를 설정하여 시스템 소프트키 영역 계산
@@ -131,28 +136,28 @@ class MainActivity : AppCompatActivity() {
 
             insets // 반환
         }
-//        webView.setOnApplyWindowInsetsListener { view, insets ->
-//            val systemGestureInsets = insets.systemGestureInsets
-//            val softKeyHeight = systemGestureInsets.bottom // 소프트키 높이 가져오기
-//
-//            // WebView의 패딩 또는 마진을 조정 (bottom에 소프트키 높이 반영)
-//            view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
-//                bottomMargin = softKeyHeight // WebView 높이 줄임
-//            }
-//            insets // 반환
-//        }
+    //        webView.setOnApplyWindowInsetsListener { view, insets ->
+    //            val systemGestureInsets = insets.systemGestureInsets
+    //            val softKeyHeight = systemGestureInsets.bottom // 소프트키 높이 가져오기
+    //
+    //            // WebView의 패딩 또는 마진을 조정 (bottom에 소프트키 높이 반영)
+    //            view.updateLayoutParams<ViewGroup.MarginLayoutParams> {
+    //                bottomMargin = softKeyHeight // WebView 높이 줄임
+    //            }
+    //            insets // 반환
+    //        }
 
-        webAppInterface = WebAppInterface(webView, bleController, this@MainActivity)
+        webAppInterface = WebAppInterface(webView, bleController, this@MainActivity, coroutineScope)
         hybridAppBridge = HybridAppBridge(webView, bleController, this@MainActivity, webAppInterface)
-//        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
+    //        webAppInterface = WebAppInterface.initialize(webView, bleController, this@MainActivity)
 
         // WebView 설정
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.76:3000?timestamp=${System.currentTimeMillis()}"
-//        val url = "http://192.168.45.193:3000"
-//        val url = "app.cocabot.com"
+        val url = "http://192.168.45.184:3000?timestamp=${System.currentTimeMillis()}"
+    //        val url = "http://192.168.45.193:3000"
+    //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
 
         WebView.setWebContentsDebuggingEnabled(true)
@@ -161,17 +166,17 @@ class MainActivity : AppCompatActivity() {
         webView.clearCache(true)
         webView.clearHistory()
 
-//        // FrontEnd 디버깅 로그 출력
-//        webView.webChromeClient = object : WebChromeClient() {
-//            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-//                Log.d(mainLogTag, "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
-//                return super.onConsoleMessage(consoleMessage)
-//            }
-//        }
+    //        // FrontEnd 디버깅 로그 출력
+    //        webView.webChromeClient = object : WebChromeClient() {
+    //            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
+    //                Log.d(mainLogTag, "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
+    //                return super.onConsoleMessage(consoleMessage)
+    //            }
+    //        }
 
-// WebView 초기화 -----------------------------------------------------------------------------------
+    // WebView 초기화 -----------------------------------------------------------------------------------
 
-// UI 초기화 ---------------------------------------------------------------------------------------
+    // UI 초기화 ---------------------------------------------------------------------------------------
         // activity_main.xml의 루트 레이아웃 가져오기
         val rootLayout = findViewById<LinearLayout>(R.id.root_layout) // activity_main.xml의 루트 레이아웃 ID
 
@@ -184,58 +189,49 @@ class MainActivity : AppCompatActivity() {
             // 데이터가 변경되면 UI 업데이트
             webAppInterface.subObserveData(newData)
         })
-// UI 초기화 ---------------------------------------------------------------------------------------
-    }
-/*
-앱 최초 실행 시:
-    onCreate() → onStart() → onResume()
-앱 종료 시:
-    onPause() → onStop() → onDestroy()
-화면 회전 시:
-    onPause() → onStop() → onDestroy() → onCreate() → onStart() → onResume()
-다이얼로그나 팝업이 화면 일부를 가릴 때:
-    onPause() (다시 전체화면으로 돌아올 때: onResume())
-백 버튼으로 앱 종료 시:
-    onPause() → onStop() → onDestroy()
-앱이 메모리 부족으로 강제 종료될 때:
-    onPause() → onStop() → onDestroy() (다시 실행 시: onCreate()부터 새로 시작)
-* */
-    override fun onStart() {
-        super.onStart()
-        // 액티비티가 사용자에게 보여지기 직전에 호출
-        // APP 시작시 자동 실행하는 작업들
-        Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
-
-        handler.postDelayed(delayOnResumeCallback,  500)
+    // UI 초기화 ---------------------------------------------------------------------------------------
     }
 
-    override fun onResume() {
-        super.onResume()
-        Log.i(mainLogTag, "onResume START")
-//        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
-
+    private fun appOpen(){
 //        webView.reload()  // 새로고침처럼됨
 //        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
 //        Log.i(mainLogTag, "웹뷰 리로드")
+
+//        handler.postDelayed(delayOnResumeCallback,  500)
+        coroutineScope.launch {
+            Log.i(mainLogTag, "코루틴 스코프 실행 !")
+            delay(500)
+            val pairedDevices = bleController.getParingDevices() ?: return@launch
+            if (pairedDevices.isNotEmpty()) {
+                Log.i(mainLogTag, "코루틴 스코프 실행 >> 페어링된 기기 발견: ${pairedDevices}")
+                // 바로 연결 시도
+                for (pairedDevice in pairedDevices) {
+                    val conDeviceList = bleController.getConnectedDevices()
+//                if(!(pairedDevice in conDeviceList)){}
+                    if (!conDeviceList.contains(pairedDevice)) {
+                        // 이미 연결되어 있다면 재연결 시도 X
+                        connectToDeviceWithPermissionCheck(pairedDevice,true)
+                    }
+                }
+            } else {
+                Log.i(mainLogTag, "페어링된 기기 없음")
+                // 필요한 경우 여기서 다른 처리
+            }
+            Log.i(mainLogTag, "onStart END")
+        }
     }
 
-    override fun onPause() {
-        super.onPause()
+    private fun appClose(){
+/*
+* onResume -> onDestroy 시에는 onResume의 delayOnResumeCallback 지연 함수가 잘 취소가 되는데
+* onDestroy -> onResume시에는 onDestroy 의 delayOnDestroyCallback 지연 함수는 취소가 안됨
+* ( 이유 : onResume 하면서 delayOnDestroyCallback 의 참조가 새로 할당 되므로 )
+* */
+//        // onResume 자동 연결 콜백 취소 처리
+//        handler.removeCallbacks(delayOnResumeCallback)
 
-        Log.i(mainLogTag, "onPause")
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.i(mainLogTag, "onDestroy START")
-        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
-        /*
-        * onResume -> onDestroy 시에는 onResume의 delayOnResumeCallback 지연 함수가 잘 취소가 되는데
-        * onDestroy -> onResume시에는 onDestroy 의 delayOnDestroyCallback 지연 함수는 취소가 안됨
-        * ( 이유 : onResume 하면서 delayOnDestroyCallback 의 참조가 새로 할당 되므로 )
-        * */
-        // onResume 자동 연결 콜백 취소 처리
-        handler.removeCallbacks(delayOnResumeCallback)
+        // 코루틴 스코프 Job 들 전부 종료 처리
+        coroutineScope.cancel()
 
         // Callback 메모리 해제 + handler 객체
         Log.d(mainLogTag, "디버깅중 < 모든 기기 연결 해제 시도 11111 ")
@@ -255,8 +251,140 @@ class MainActivity : AppCompatActivity() {
         webView.pauseTimers();
         // NOTE: This can occasionally cause a segfault below API 17 (4.2)
         webView.destroy();
+    }
 
+
+/*
+구형 폰
+--Android 10(API 29) 이전-- 0~9
+=========SM-G930S, And 8, API 26=========
+앱 최초 실행 / 빌드시
+    onCreate() → onStart() → onResume()
+OverView 버튼 클릭시 ( 잠금화면 시 )
+    onPause() → onStop()
+앱 강제 종료
+    OverView 버튼 클릭시 상황 이후 그냥 종료됨
+OverView 에서 다시 앱 킬 시
+    onStart() → onResume()
+뒤로가기 버튼 앱 종료시
+    onPause() → onStop() → onDestroy()
+뒤로가기 후 다시 킬 시
+    onCreate() → onStart() → onResume()
+화면 회전 시
+    onPause() → onStop() → onDestroy() → onCreate() → onStart() → onResume()
+
+신형 폰
+--Android 10 이후-- 10~11
+=========SM-N960N, And 10, API 29=========
+앱 최초 실행 / 빌드시
+    onCreate() → onStart() → onResume()
+OverView 버튼 클릭시 ( 잠금화면 시 )
+    onPause() → onStop()
+앱 강제 종료
+    OverView 버튼 클릭시 상황 이후 그냥 종료됨
+OverView 에서 다시 앱 킬 시
+    onStart() → onResume()
+뒤로가기 버튼 앱 종료시
+    onPause() → onStop() → onDestroy()
+뒤로가기 후 다시 킬 시
+    onCreate() → onStart() → onResume()
+화면 회전 시
+    onPause() → onStop() → onDestroy() → onCreate() → onStart() → onResume()
+
+--Android 12(API 31) 이후-- 12~
+=========SM-A325N, And 13, API 33=========
+( finish() 함수 호출시 onDestroy 콜백 ON ! )
+앱 최초 실행 / 빌드시
+    onCreate() → onStart() → onResume()
+OverView 버튼 클릭시 ( 잠금화면 시 )
+    onPause() → onStop()
+앱 강제 종료
+    OverView 버튼 클릭시 상황 이후 그냥 종료됨
+OverView 에서 다시 앱 킬 시
+    onStart() → onResume()
+뒤로가기 버튼 앱 종료시
+    onPause() → onStop()
+뒤로가기 후 다시 킬 시
+    onCreate() → onStart() → onResume()
+화면 회전 시
+    onPause() → onStop() → onDestroy() → onCreate() → onStart()
+* */
+
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContentView(R.layout.activity_main)
+        Log.i(mainLogTag, "onCreate")
+        Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
+        appCreate()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 액티비티가 사용자에게 보여지기 직전에 호출
+        // APP 시작시 자동 실행하는 작업들
+        Log.i(mainLogTag, "onStart START")
+        Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.i(mainLogTag, "onResume START")
+        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+        appOpen()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.i(mainLogTag, "onPause")
+        Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.i(mainLogTag, "onStop")
+        Toast.makeText(this,"onStop", Toast.LENGTH_SHORT).show()
+        finish() // 안드로이드 12 이상 부터는 finish() 함수를 통해서 종료 되야지 onDestroy 가 호출됨
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(mainLogTag, "onDestroy START")
+        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
+        appClose()
         Log.i(mainLogTag, "onDestroy END")
+    }
+
+    override fun onBackPressed() {
+        Log.i(mainLogTag, "onBackPressed :  ${webView.canGoBack()}")
+        if (webView.canGoBack()) {
+            webView.goBack()
+        } else {
+            super.onBackPressed()
+            finish() // 안드로이드 12 이상 부터는 finish() 함수를 통해서 종료 되야지 onDestroy 가 호출됨
+        }
+
+        // TODO: 김쿤네 회사 onBackPressed 작업 List
+//        if (_popupList.size() !== 0) {
+//            val popup: WebView = _popupList.get(_listSortNum)
+//
+//            if (_locationCaseUrl != null) {
+//                if (popup.url.equals(_locationCaseUrl, ignoreCase = true)) {
+//                    popup.loadUrl("javascript:window.webViewBackCase()")
+//                }
+//            } else if (popup.canGoBack()) {
+//                popup.goBack()
+//            } else {
+//                popup.loadUrl("javascript:window.close()")
+//            }
+//        } else if (_popupList.size() === 0) {
+//            if (_webView.canGoBack()) {
+//                _webView.goBack()
+//            } else {
+//                _webView.loadUrl("javascript:requestHwBack()")
+//            }
+//        }
     }
 
     //    // BLE Connect 권한 검사 메서드
@@ -374,38 +502,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /**
-     * 뒤로가기 버튼 처리
-     */
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
-        }
-
-        // TODO: 김쿤네 회사 onBackPressed 작업 List
-//        if (_popupList.size() !== 0) {
-//            val popup: WebView = _popupList.get(_listSortNum)
-//
-//            if (_locationCaseUrl != null) {
-//                if (popup.url.equals(_locationCaseUrl, ignoreCase = true)) {
-//                    popup.loadUrl("javascript:window.webViewBackCase()")
-//                }
-//            } else if (popup.canGoBack()) {
-//                popup.goBack()
-//            } else {
-//                popup.loadUrl("javascript:window.close()")
-//            }
-//        } else if (_popupList.size() === 0) {
-//            if (_webView.canGoBack()) {
-//                _webView.goBack()
-//            } else {
-//                _webView.loadUrl("javascript:requestHwBack()")
-//            }
-//        }
-    }
-
     // TODO: 추가작업 부분
     // bleController.bleScanPopup()
     // bleController.stopBleScan()
@@ -445,32 +541,6 @@ class MainActivity : AppCompatActivity() {
             webAppInterface.resScanStart(scanList)
 
             Log.d(mainLogTag,"scanList >>>> $scanList")
-/*
-scanResult >>>>
-ScanResult{
-    device=5F:29:7E:A2:21:88,  <<-요거 BluetoothDevice 타입임
-    scanRecord=ScanRecord [mAdvertiseFlags=26, mServiceUuids=null,
-        mManufacturerSpecificData={76=[16, 5, 57, 28, 38, 20, 120]},
-        mServiceData={}, mTxPowerLevel=12, mDeviceName=Microchip],
-    rssi=-62, timestampNanos=801393765211516, eventType=27, primaryPhy=1, secondaryPhy=0, advertisingSid=255, txPower=127, periodicAdvertisingInterval=0}
-
-scanResult >>>>
-ScanResult{
-    device=9C:95:6E:40:0F:75,  <<-요거 BluetoothDevice 타입임
-    scanRecord=ScanRecord [mAdvertiseFlags=5, mServiceUuids=null,
-        mManufacturerSpecificData={}, mServiceData={0000feda-0000-1000-8000-00805f9b34fb=[-1, 1]},
-        mTxPowerLevel=-2147483648, mDeviceName=kang
-    ],
-    rssi=-48,
-    timestampNanos=801393356507170,
-    eventType=27,
-    primaryPhy=1,
-    secondaryPhy=0,
-    advertisingSid=255,
-    txPower=127,
-    periodicAdvertisingInterval=0
-}
-*/
         }
 
 

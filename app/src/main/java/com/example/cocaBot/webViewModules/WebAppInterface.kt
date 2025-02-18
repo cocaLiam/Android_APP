@@ -35,6 +35,8 @@ import kotlin.reflect.KProperty1
 
 // Custom Package
 import com.example.cocaBot.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 //class WebAppInterface private constructor(
 //    webView: WebView,
@@ -73,6 +75,7 @@ class WebAppInterface(
     private val webView: WebView,
     private val bleController: BleController,
     private val mainActivity: MainActivity,
+    private val coroutineScope: CoroutineScope
 ) {
     private val webAppInterFaceTag = " - WebAppInterface"
 //    private val webViewRef = WeakReference(webView) // WebView를 WeakReference로 감싸기
@@ -273,7 +276,9 @@ class WebAppInterface(
             * WEB ------reqReadData-------> APP --requestReadData-->
             * 기기 --onCharacteristicRead--> APP --resReadData--> WEB
             * */
-            bleController.requestReadData(deviceInfo.macAddress);
+            coroutineScope.launch {
+                bleController.requestReadData(deviceInfo.macAddress)
+            }
 
         } catch (e: Exception) {
             Log.e(webAppInterFaceTag, "reqReadData JSON 변환 중 오류 발생: ${e.message}")
@@ -325,7 +330,9 @@ class WebAppInterface(
             // TODO: 임시로 00, 01 DATA 를 보내는 형상
             val inputData = writeData.msg[writeData.msg.keys.firstOrNull()].toString()
             val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
-            bleController.writeData(dataToSend,writeData.deviceInfo.macAddress)
+            coroutineScope.launch {
+                bleController.writeData(dataToSend, writeData.deviceInfo.macAddress)
+            }
 
             Log.i(webAppInterFaceTag,"pubSendData DOWN")
         } catch (e: JSONException) {

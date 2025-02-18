@@ -8,6 +8,11 @@ import android.os.Handler
 import android.os.Build
 import android.content.Context
 
+// 비동기 함수 ( await 용 )
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+
+
 // UI Pack
 import android.util.Log
 import android.widget.LinearLayout
@@ -29,7 +34,6 @@ import android.bluetooth.le.ScanCallback
 // WebView Pack
 
 // DataClass Pack
-import com.example.cocaBot.bleModules.PushBotUuid
 
 // Util Pack
 import android.annotation.SuppressLint
@@ -39,20 +43,16 @@ import androidx.activity.result.ActivityResultLauncher
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.full.declaredFunctions
+
 // Custom Package
-import com.example.cocaBot.MyContextData
-import com.example.cocaBot.webViewModules.DeviceInfo
-import kotlin.math.E
-import kotlin.math.log
 
 
-class BleController(private val context: Context) {
+class BleController(private val context: Context, private val coroutineScope: CoroutineScope) {
     // BLE 관련 멤버 변수
     private lateinit var bluetoothManager: BluetoothManager
     lateinit var bluetoothAdapter: BluetoothAdapter
     private lateinit var bluetoothLeScanner: BluetoothLeScanner
     private lateinit var scanCallback: ScanCallback
-    private lateinit var gattCallback: BluetoothGattCallback
 
     //    // UUID는 GATT 서비스와 특성을 식별하는 데 사용됩니다.
     // TRS Service ( peri_uart )
@@ -76,7 +76,7 @@ class BleController(private val context: Context) {
     // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
     //    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
     // <application 단에서 다루는 Context Data ( 앱이 완전히 종료 되기 전까지 Data 를 보유함 )
-    private var MapGatt: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
+    private var gtMap: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
 
     /**
      * BLE 모듈 초기화
@@ -171,24 +171,19 @@ class BleController(private val context: Context) {
     }
 
     fun removeGattServer(macAddress: String, msg: String) {
-        MapGatt.remove(macAddress)
-        Log.i(logTagBleController,"$msg : MapGatt 객체 삭제")
+        Log.i(logTagBleController,"삭제 요청자 MSG : $msg")
+        Log.i(logTagBleController, "GATT MAP 삭제 시도 : ${gtMap.keys().toList()}")
+        gtMap.remove(macAddress)
+        Log.i(logTagBleController, "GATT MAP 삭제 결과 : ${gtMap.keys().toList()}")
     }
     fun getGattServer(macAddress: String): BluetoothGatt? {
         try {
             val device: BluetoothDevice = getBluetoothDevice(macAddress) ?: throw Exception("getBluetoothDevice 실패")
-            val gt: BluetoothGatt? = MapGatt[macAddress]
-            Log.d(logTagBleController,"device : $device , gt : $gt")
-//            int STATE_DISCONNECTED = 0;
-//            int STATE_CONNECTING = 1;
-//            int STATE_CONNECTED = 2;
-//            int STATE_DISCONNECTING = 3;
-            Log.d(logTagBleController, " getConnectionState : ${bluetoothManager.getConnectionState(device, BluetoothProfile.GATT)}")
-            Log.d(logTagBleController, " getConnectionState : ${(bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED)}")
+            val gt: BluetoothGatt? = gtMap[macAddress]
 
             //TODO : 디버깅중 << 무조건 새로 GATT 연결하게끔 해서 테스트중
             // 기존 연결이 있고 정상적으로 연결된 상태인 경우
-//            if (gattServer?.getConnectionState(device) == BluetoothProfile.STATE_CONNECTED) {
+//            if (gtServer?.getConnectionState(device) == BluetoothProfile.STATE_CONNECTED) {
             if (bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED) {
                 if(gt != null){
                     Log.i(logTagBleController,"GATT 기존 서버 사용 $gt")
@@ -207,9 +202,9 @@ class BleController(private val context: Context) {
                     }
                 })
 
-                Log.d(logTagBleController,"MapGatt $MapGatt")
+                Log.d(logTagBleController,"gtMap $gtMap")
                 if (newGt != null) {
-                    MapGatt[macAddress] = newGt
+                    gtMap[macAddress] = newGt
                     return newGt
                 }else return null
             }
@@ -223,21 +218,10 @@ class BleController(private val context: Context) {
         }
     }
 
-    fun getWriteCharacteristic(macAddress: String): BluetoothGattCharacteristic? {
-        return try {
-            val gatt = getGattServer(macAddress) ?: return null
-            val service = gatt.getService(serviceUuid)
-            service?.getCharacteristic(writeCharacteristicUuid)
-        } catch (e: Exception) {
-            Log.e(logTagBleController, "Get 함수 실패 : ${macAddress} << getWriteCharacteristic")
-            return null
-        }
-    }
-
-    fun getReadCharacteristic(macAddress: String): BluetoothGattCharacteristic? {
+    suspend fun getWriteCharacteristic(macAddress: String): BluetoothGattCharacteristic? {
         return try {
             val gt = getGattServer(macAddress) ?: return null
-            Log.d(logTagBleController,"디버깅중 < gatt :${gt}, gt.services : ${gt.services}")
+            Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
 
             // 서비스 검색이 완료될 때까지 대기
             var attempts = 0
@@ -245,22 +229,42 @@ class BleController(private val context: Context) {
             while ((gt.services).isEmpty() && attempts < 20) {
                 Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
                 attempts++
-                Thread.sleep(100)  // 0.1초씩 최대 2초 대기
+                delay(100)  // 0.1초씩 최대 2초 대기
             }
 
-//            if (services.isEmpty()) {
-//                // 서비스가 아직 발견되지 않은 상태
-//                gt.discoverServices()
-//                throw Exception("서비스가 아직 발견되지 않았습니다")
-//            }
+            val service = gt.getService(serviceUuid)
+
+            Log.d(logTagBleController,"디버깅중 < service :${service} ${serviceUuid}")
+
+            val writeChar = service?.getCharacteristic(writeCharacteristicUuid)
+            Log.d(logTagBleController,"디버깅중 < writeChar :${writeChar} ${writeCharacteristicUuid}")
+
+            writeChar
+        } catch (e: Exception) {
+            Log.e(logTagBleController, "Get 함수 실패 : ${macAddress} << getWriteCharacteristic")
+            return null
+        }
+    }
+
+    suspend fun getReadCharacteristic(macAddress: String): BluetoothGattCharacteristic? {
+        return try {
+            val gt = getGattServer(macAddress) ?: return null
+            Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
+
+            // 서비스 검색이 완료될 때까지 대기
+            var attempts = 0
+//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
+            while ((gt.services).isEmpty() && attempts < 20) {
+                Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
+                attempts++
+                delay(100)  // 0.1초씩 최대 2초 대기
+            }
 
             val service = gt.getService(serviceUuid)
             Log.d(logTagBleController,"디버깅중 < service :${service} ${serviceUuid}")
-//            Thread.sleep(1000) // 1초 대기  BluetoothGatt@c146400
 
             val readChar = service?.getCharacteristic(readCharacteristicUuid)
             Log.d(logTagBleController,"디버깅중 < readChar :${readChar} ${readCharacteristicUuid}")
-//            Thread.sleep(1000) // 1초 대기
 
             readChar
         } catch (e: Exception) {
@@ -314,7 +318,7 @@ class BleController(private val context: Context) {
             }
 
             // GATT 서버에 연결 시도
-            val gattServer: BluetoothGatt = device.connectGatt(
+            val gtServer: BluetoothGatt = device.connectGatt(
                 context, false, object : BluetoothGattCallback() {
                     // GATT 연결 상태가 변경되었을 때 호출되는 콜백
                     override fun onConnectionStateChange(
@@ -362,7 +366,7 @@ class BleController(private val context: Context) {
                             return
                         }
                         Log.d(logTagBleController, "GATT 서비스 검색 성공")
-                        MapGatt[device.address] = gatt
+                        gtMap[device.address] = gatt
 
                         // 검색된 모든 서비스와 특성을 로그로 출력
                         for (service in gatt.services) {
@@ -423,39 +427,77 @@ class BleController(private val context: Context) {
                         }
                     }
 
-                    // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
                     override fun onCharacteristicRead(
-                        // 구형 안드로이드 버전의 경우
-                        gatt: BluetoothGatt,
-                        characteristic: BluetoothGattCharacteristic,
-                        status: Int
-                    ) {
-                        super.onCharacteristicRead(gatt, characteristic, status)
-                        Log.i(
-                            logTagBleController,
-                            " 구형 READ FROM ${device.name} : ${device.address}"
-                        )
-                        if (characteristic.value == null) {
-                            Log.e(logTagBleController, "characteristic value is NULL")
-                        } else {
-                            handleCharacteristicRead(device, characteristic.value, status)
-                        }
-                    }
-
-                    override fun onCharacteristicRead(
-                        // 일반 안드로이드 버전의 경우
                         gatt: BluetoothGatt,
                         characteristic: BluetoothGattCharacteristic,
                         receivedData: ByteArray,
                         status: Int
                     ) {
-                        super.onCharacteristicRead(gatt, characteristic, receivedData, status)
-                        Log.i(
-                            logTagBleController,
-                            " 신형 READ FROM ${device.name} : ${device.address}"
-                        )
-                        handleCharacteristicRead(device, receivedData, status)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            // Android 13 이상에서 실행
+                            super.onCharacteristicRead(gatt, characteristic, receivedData, status)
+                            Log.i(
+                                logTagBleController,
+                                "신형 READ FROM ${device.name} : ${device.address}"
+                            )
+                            handleCharacteristicRead(device, receivedData, status)
+                        }
                     }
+
+                    @Deprecated("Deprecated in Java")
+                    override fun onCharacteristicRead(
+                        gatt: BluetoothGatt,
+                        characteristic: BluetoothGattCharacteristic,
+                        status: Int
+                    ) {
+                        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                            // Android 13 미만에서 실행
+                            super.onCharacteristicRead(gatt, characteristic, status)
+                            Log.i(
+                                logTagBleController,
+                                "구형 READ FROM ${device.name} : ${device.address}"
+                            )
+                            if (characteristic.value == null) {
+                                Log.e(logTagBleController, "characteristic value is NULL")
+                            } else {
+                                handleCharacteristicRead(device, characteristic.value, status)
+                            }
+                        }
+                    }
+
+//                    // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
+//                    override fun onCharacteristicRead(
+//                        // 구형 안드로이드 버전의 경우
+//                        gatt: BluetoothGatt,
+//                        characteristic: BluetoothGattCharacteristic,
+//                        status: Int
+//                    ) {
+//                        super.onCharacteristicRead(gatt, characteristic, status)
+//                        Log.i(
+//                            logTagBleController,
+//                            " 구형 READ FROM ${device.name} : ${device.address}"
+//                        )
+//                        if (characteristic.value == null) {
+//                            Log.e(logTagBleController, "characteristic value is NULL")
+//                        } else {
+//                            handleCharacteristicRead(device, characteristic.value, status)
+//                        }
+//                    }
+//
+//                    override fun onCharacteristicRead(
+//                        // 일반 안드로이드 버전의 경우
+//                        gatt: BluetoothGatt,
+//                        characteristic: BluetoothGattCharacteristic,
+//                        receivedData: ByteArray,
+//                        status: Int
+//                    ) {
+//                        super.onCharacteristicRead(gatt, characteristic, receivedData, status)
+//                        Log.i(
+//                            logTagBleController,
+//                            " 신형 READ FROM ${device.name} : ${device.address}"
+//                        )
+//                        handleCharacteristicRead(device, receivedData, status)
+//                    }
 
                     // 데이터를 썼을 때 호출되는 콜백
                     override fun onCharacteristicWrite(
@@ -465,19 +507,18 @@ class BleController(private val context: Context) {
                     ) {
                         super.onCharacteristicWrite(gatt, characteristic, status)
                         if (status == BluetoothGatt.GATT_SUCCESS) {
-                            // 데 공
-                            Log.i(logTagBleController, "데이터 전송 성공: ${String(characteristic.value)}")
+                            Log.i(logTagBleController, "데이터 전송 성공: $status")
                         } else {
-                            // 데이터 전송 실패
                             Log.e(logTagBleController, "데이터 전송 실패: $status")
                         }
                     }
-                })
-            return gattServer
+                }
+            )
+            return gtServer
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
             return null
-        } catch (e: SecurityException) {
+        } catch (e: Exception) {
             Log.e(logTagBleController, "블루투스 연결 시도 중 보안 예외 발생: ${e.message}")
             return null
         }
@@ -486,7 +527,7 @@ class BleController(private val context: Context) {
     /**
      * 데이터 쓰기
      */
-    fun writeData(data: ByteArray, macAddress: String ) {
+    suspend fun writeData(data: ByteArray, macAddress: String ) {
         try {
             hasBluetoothConnectPermission() ?: return
             val gt = getGattServer(macAddress)
@@ -517,27 +558,51 @@ class BleController(private val context: Context) {
      * App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
      * --> onCharacteristicRead 오버라이드 함수 호출
      */
-    fun requestReadData(macAddress: String) {
+    suspend fun requestReadData(macAddress: String) {
         try {
             hasBluetoothConnectPermission() ?: return
             val gt = getGattServer(macAddress)
             val readChar = getReadCharacteristic(macAddress)
-            Log.d(logTagBleController,"디버깅중 < requestReadData : $readChar , gt : $gt")
 
-            if( gt === null || readChar === null){
+            Log.d(logTagBleController, "디버깅중 < requestReadData : $readChar , gt : $gt")
+
+            if (gt === null|| readChar ===null) {
                 throw Exception("GATT 서버 : $gt , read 특성 $readChar << 구성되어 있지 않음")
             }
+
             val success = gt.readCharacteristic(readChar)
-            Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${MapGatt}")
-            if (!success){
-                removeGattServer(macAddress,"requestReadData 실패로 인해 GATT 서버 삭제")
+            Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${gtMap}")
+            if (!success) {
+                removeGattServer(macAddress, "requestReadData 실패로 인해 GATT 서버 삭제")
             }
-        } catch (e: SecurityException){
+        } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
         } catch (e: Exception) {
-            Log.e(logTagBleController, "RaedData 에러: ${e.message}")
+            Log.e(logTagBleController, "ReadData 에러: ${e.message}")
         }
     }
+
+//    fun requestReadData(macAddress: String) {
+//        try {
+//            hasBluetoothConnectPermission() ?: return
+//            val gt = getGattServer(macAddress)
+//            val readChar = getReadCharacteristic(macAddress)
+//            Log.d(logTagBleController,"디버깅중 < requestReadData : $readChar , gt : $gt")
+//
+//            if( gt === null || readChar === null){
+//                throw Exception("GATT 서버 : $gt , read 특성 $readChar << 구성되어 있지 않음")
+//            }
+//            val success = gt.readCharacteristic(readChar)
+//            Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${gtMap}")
+//            if (!success){
+//                removeGattServer(macAddress,"requestReadData 실패로 인해 GATT 서버 삭제")
+//            }
+//        } catch (e: SecurityException){
+//            Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
+//        } catch (e: Exception) {
+//            Log.e(logTagBleController, "RaedData 에러: ${e.message}")
+//        }
+//    }
 
     // ( 트리거 : APP ) App 이 Read 요청 > 기기가 Data 전송 > App 이 읽음
     private fun handleCharacteristicRead(device: BluetoothDevice, receivedData: ByteArray, status: Int) {
@@ -643,9 +708,15 @@ class BleController(private val context: Context) {
      */
     fun disconnectAllDevices() {
         hasBluetoothConnectPermission() ?: return
-        Log.i(logTagBleController, "모든 기기 연결 해제 시도 : ${MapGatt.keys()}")
         try {
-            for (bleDevice: BluetoothDevice in getConnectedDevices()) {
+            val connectedDevices = getConnectedDevices()
+            Log.d(logTagBleController, "연결된 기기 수: ${connectedDevices.size}")
+            if(connectedDevices.isEmpty()) {
+                Log.i(logTagBleController, "연결된 기기가 없습니다.")
+                return
+            }
+
+            for (bleDevice: BluetoothDevice in connectedDevices) {
                 val gt = getGattServer(bleDevice.address)
                 gt ?: throw Exception("${bleDevice.address}, ${bleDevice.name} 의 GATT 서버 구성이 안돼어 있음")
                 gt.disconnect()
@@ -659,8 +730,6 @@ class BleController(private val context: Context) {
             Log.e(logTagBleController, "disconnectAllDevices Failed ${e.message}")
             return
         }
-
-        Log.i(logTagBleController, "모든 기기 연결 해제 결과 : ${MapGatt.keys()}")
     }
 
     /**

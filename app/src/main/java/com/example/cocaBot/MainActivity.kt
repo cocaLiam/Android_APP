@@ -10,14 +10,19 @@ package com.example.cocaBot
 
 // dataType Pack
 
+// Job Service Pack
+
 // Util Pack
+
+// 비동기 전용 라이브러리
+
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.webkit.WebView
@@ -28,7 +33,6 @@ import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.view.updateLayoutParams
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import android.view.ViewGroup
@@ -40,16 +44,22 @@ import com.example.cocaBot.utils.LiveDataManager
 import com.example.cocaBot.webViewModules.DeviceInfo
 import com.example.cocaBot.webViewModules.DeviceList
 import com.example.cocaBot.webViewModules.HybridAppBridge
-import com.example.cocaBot.webViewModules.JsonValidationResult
 import com.example.cocaBot.webViewModules.WebAppInterface
-
-// 비동기 전용 라이브러리
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
+import com.example.cocaBot.services.OnDestroyJobService
+import com.example.cocaBot.services.OnResumeJobService
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
+import android.content.ComponentName
+import android.content.Context
+import android.os.Build
+import com.example.cocaBot.services.OnDestroyJobService.Companion.jobServiceLogTag
 
 
 class MainActivity : AppCompatActivity() {
@@ -73,30 +83,36 @@ class MainActivity : AppCompatActivity() {
     // 기타 등등 변수들
     private val mainLogTag = " - MainActivity "
 
-    // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
-    private val handler = MyContextData.handler
-//    private val delayOnResumeCallback = Runnable {
-//        val pairedDevices = bleController.getParingDevices() ?: return@Runnable
-//        if (pairedDevices.isNotEmpty()) {
-//            Log.i(mainLogTag, "페어링된 기기 발견: ${pairedDevices}")
-//            // 바로 연결 시도
-//            for (pairedDevice in pairedDevices) {
-//                val conDeviceList = bleController.getConnectedDevices()
-////                if(!(pairedDevice in conDeviceList)){}
-//                if (!conDeviceList.contains(pairedDevice)) {
-//                    // 이미 연결되어 있다면 재연결 시도 X
-//                    connectToDeviceWithPermissionCheck(pairedDevice,true)
-//                }
-//            }
-//        } else {
-//            Log.i(mainLogTag, "페어링된 기기 없음")
-//            // 필요한 경우 여기서 다른 처리
-//        }
-//        Log.i(mainLogTag, "onResume END")
-//    }
+    // JobService 객체
+    private lateinit var jobScheduler: JobScheduler
+    private lateinit var onDestroyJobInfo: JobInfo
+    private lateinit var onResumeJobInfo: JobInfo
+
+    private fun webViewPause(tmp:WebView){
+        tmp.onPause()
+        tmp.pauseTimers()
+    }
+    private fun webViewDestroy(tmp:WebView){
+        // WebView 완전 종료
+        tmp.clearHistory()
+        tmp.clearCache(true)
+        tmp.loadUrl("about:blank")
+        tmp.removeAllViews()
+        tmp.destroyDrawingCache()
+        tmp.destroy()
+    }
+    private fun webViewResume(tmp:WebView){
+        tmp.onResume()
+        tmp.resumeTimers()
+    }
+    private fun webViewCreate(context: Context, webViewId: Int): WebView{
+        val tmp = (context as Activity).findViewById<WebView>(webViewId)
+        return tmp
+    }
+
     private fun appCreate(){
         // BLE 초기화 ---------------------------------------------------------------------------------------
-        bleController = BleController(this, coroutineScope) // MainActivity는 Context를 상속받음
+        bleController = BleController(this) // MainActivity는 Context를 상속받음
 
         // 1. BluetoothManager 및 BluetoothAdapter 초기화
         bleController.setBleModules()
@@ -121,7 +137,8 @@ class MainActivity : AppCompatActivity() {
     // BLE 초기화 ---------------------------------------------------------------------------------------
 
     // WebView 초기화 -----------------------------------------------------------------------------------
-        webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
+//        webView = findViewById(R.id.webView) // activity_main.xml에 정의된 WebView ID
+        webView = webViewCreate(this, R.id.webView)
 
         // WindowInsetsListener를 설정하여 시스템 소프트키 영역 계산
         ViewCompat.setOnApplyWindowInsetsListener(webView) { view, insets ->
@@ -155,24 +172,10 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.184:3000?timestamp=${System.currentTimeMillis()}"
+        val url = "http://192.168.45.125:3000?timestamp=${System.currentTimeMillis()}"
     //        val url = "http://192.168.45.193:3000"
     //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
-
-        WebView.setWebContentsDebuggingEnabled(true)
-
-        // 캐시가 남아 있으면
-        webView.clearCache(true)
-        webView.clearHistory()
-
-    //        // FrontEnd 디버깅 로그 출력
-    //        webView.webChromeClient = object : WebChromeClient() {
-    //            override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
-    //                Log.d(mainLogTag, "${consoleMessage.message()} -- From line ${consoleMessage.lineNumber()} of ${consoleMessage.sourceId()}")
-    //                return super.onConsoleMessage(consoleMessage)
-    //            }
-    //        }
 
     // WebView 초기화 -----------------------------------------------------------------------------------
 
@@ -190,69 +193,101 @@ class MainActivity : AppCompatActivity() {
             webAppInterface.subObserveData(newData)
         })
     // UI 초기화 ---------------------------------------------------------------------------------------
+
+    // Job Service 초기화 ------------------------------------------------------------------------------
+        jobScheduler = getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+
+        // MainActivity 인스턴스를 JobService에 전달
+        OnDestroyJobService.setMainActivity(this)
+        OnResumeJobService.setMainActivity(this)
+
+        // Job 설정
+        onDestroyJobInfo = JobInfo.Builder(OnDestroyJobService.JOB_ID,
+            ComponentName(this, OnDestroyJobService::class.java))
+//            .setMinimumLatency(10 * 60 * 1000)  // 10 분
+//            .setMinimumLatency(10 * 1000)  // 10초
+            .setMinimumLatency(5 * 1000)  // 최소 지연 시간 : 5초
+            .setOverrideDeadline(10 * 1000)  // 최대 지연 시간 : 10초
+            .build()
+
+        onResumeJobInfo = JobInfo.Builder(OnResumeJobService.JOB_ID,
+            ComponentName(this, OnResumeJobService::class.java))
+            .setMinimumLatency(5 * 100)  // 최소 지연 시간 : 0.5초
+            .setOverrideDeadline(10 * 100)  // 최대 지연 시간 : 1초
+            .build()
+/*
+.setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY) : 작업 실행에 필요한 네트워크 조건을 지정 (WiFi만, 아무 네트워크나 등)
+.setPeriodic(15 * 60 * 1000) : 작업을 주기적으로 반복 실행할 시간 간격 설정 (최소 15분)
+.setMinimumLatency(10 * 60 * 1000) // 최소 지연 시간 (이 시간 이후에 실행) ( 10분 )
+.setRequiresBatteryNotLow() : 배터리가 부족하지 않을 때만 작업 실행되도록 설정
+.setPersisted(true) : 기기 재부팅 후에도 작업 일정 유지할지 설정
+.setRequiresCharging(true) : 충전 중일 때만 작업 실행되도록 설정
+.setRequiresDeviceIdle() : 기기가 대기 상태일 때만 작업 실행되도록 설정
+* */
+    // Job Service 초기화 ------------------------------------------------------------------------------
+
     }
 
     private fun appOpen(){
-//        webView.reload()  // 새로고침처럼됨
-//        webView.resumeTimers()  // 갤럭시 s1/s2의 경우 필요함 ( webView는 google Timers에 의해 내부적으로 동작한다 )
-//        Log.i(mainLogTag, "웹뷰 리로드")
+        // OnDestroyJobService JobService 취소 처리
+        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
 
-//        handler.postDelayed(delayOnResumeCallback,  500)
-        coroutineScope.launch {
-            Log.i(mainLogTag, "코루틴 스코프 실행 !")
-            delay(500)
-            val pairedDevices = bleController.getParingDevices() ?: return@launch
-            if (pairedDevices.isNotEmpty()) {
-                Log.i(mainLogTag, "코루틴 스코프 실행 >> 페어링된 기기 발견: ${pairedDevices}")
-                // 바로 연결 시도
-                for (pairedDevice in pairedDevices) {
-                    val conDeviceList = bleController.getConnectedDevices()
-//                if(!(pairedDevice in conDeviceList)){}
-                    if (!conDeviceList.contains(pairedDevice)) {
-                        // 이미 연결되어 있다면 재연결 시도 X
-                        connectToDeviceWithPermissionCheck(pairedDevice,true)
-                    }
-                }
-            } else {
-                Log.i(mainLogTag, "페어링된 기기 없음")
-                // 필요한 경우 여기서 다른 처리
-            }
-            Log.i(mainLogTag, "onStart END")
-        }
+        // TODO : TEST >> 실행시킬 스케쥴 취소 후 재등록
+        jobScheduler.cancel(OnResumeJobService.JOB_ID)
+        // TODO : TEST
+
+        webViewResume(webView)
     }
 
-    private fun appClose(){
-/*
-* onResume -> onDestroy 시에는 onResume의 delayOnResumeCallback 지연 함수가 잘 취소가 되는데
-* onDestroy -> onResume시에는 onDestroy 의 delayOnDestroyCallback 지연 함수는 취소가 안됨
-* ( 이유 : onResume 하면서 delayOnDestroyCallback 의 참조가 새로 할당 되므로 )
-* */
-//        // onResume 자동 연결 콜백 취소 처리
-//        handler.removeCallbacks(delayOnResumeCallback)
+    fun appPause(){
+        // OnResumeJobService JobService 취소 처리
+        jobScheduler.cancel(OnResumeJobService.JOB_ID)
 
-        // 코루틴 스코프 Job 들 전부 종료 처리
-        coroutineScope.cancel()
+        // TODO : TEST >> 실행시킬 스케쥴 취소 후 재등록
+        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
+        // TODO : TEST
 
-        // Callback 메모리 해제 + handler 객체
-        Log.d(mainLogTag, "디버깅중 < 모든 기기 연결 해제 시도 11111 ")
+        webViewPause(webView)
+    }
+
+    fun appDestroy(){
+        Log.i(mainLogTag, "appDestroy 실행 ")
         bleController.disconnectAllDevices()
-        handler.removeCallbacksAndMessages(null)
-//        handler = null
+        webViewDestroy(webView)
 
-        webView.clearHistory();
-        // NOTE: clears RAM cache,
-        webView.clearCache(true);
-        webView.loadUrl("about:blank");
-        webView.onPause();
-        webView.removeAllViews();
-        webView.destroyDrawingCache();
-        // If you create another WebView after calling this,
-        // make sure to call mWebView.resumeTimers().
-        webView.pauseTimers();
-        // NOTE: This can occasionally cause a segfault below API 17 (4.2)
-        webView.destroy();
+        Log.i(mainLogTag, "appDestroy 종료 ")
     }
 
+    fun jobServiceOnDestroy(){
+        Log.i(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo SERVICE 실행")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            finish()
+        }else{
+            appDestroy()
+        }
+        Log.i(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo SERVICE 실행 완료")
+    }
+
+    fun jobServiceOnResume(){
+        Log.i(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo SERVICE 실행")
+        val pairedDevices = bleController.getParingDevices() ?: mutableSetOf<BluetoothDevice>()
+        if (pairedDevices.isNotEmpty()) {
+            Log.i(OnResumeJobService.jobServiceLogTag, "페어링된 기기 발견: ${pairedDevices}")
+            // 바로 연결 시도
+            for (pairedDevice in pairedDevices) {
+                val conDeviceList = bleController.getConnectedDevices()
+//                if(!(pairedDevice in conDeviceList)){}
+                if (!conDeviceList.contains(pairedDevice)) {
+                    // 이미 연결되어 있다면 재연결 시도 X
+                    connectToDeviceWithPermissionCheck(pairedDevice,true)
+                }
+            }
+        } else {
+            Log.w(OnResumeJobService.jobServiceLogTag, "페어링된 기기 없음")
+            // 필요한 경우 여기서 다른 처리
+        }
+        Log.i(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo SERVICE 실행 완료")
+    }
 
 /*
 구형 폰
@@ -307,7 +342,7 @@ OverView 에서 다시 앱 킬 시
 뒤로가기 후 다시 킬 시
     onCreate() → onStart() → onResume()
 화면 회전 시
-    onPause() → onStop() → onDestroy() → onCreate() → onStart()
+    onPause() → onStop() → onDestroy() → onCreate() → onStart() → onResume()?
 * */
 
 
@@ -317,6 +352,7 @@ OverView 에서 다시 앱 킬 시
         setContentView(R.layout.activity_main)
         Log.i(mainLogTag, "onCreate")
         Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
+
         appCreate()
     }
 
@@ -324,36 +360,89 @@ OverView 에서 다시 앱 킬 시
         super.onStart()
         // 액티비티가 사용자에게 보여지기 직전에 호출
         // APP 시작시 자동 실행하는 작업들
-        Log.i(mainLogTag, "onStart START")
+        Log.i(mainLogTag, "onStart")
         Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
     }
 
     override fun onResume() {
         super.onResume()
-        Log.i(mainLogTag, "onResume START")
+        Log.i(mainLogTag, "onResume")
         Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+
         appOpen()
+
+        if (jobScheduler.schedule(onResumeJobInfo) == JobScheduler.RESULT_SUCCESS) {
+            Log.d(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo 스케줄링 성공")
+        } else {
+            Log.d(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo 스케줄링 실패")
+        }
     }
 
     override fun onPause() {
         super.onPause()
         Log.i(mainLogTag, "onPause")
         Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
+
+        appPause()
     }
 
+    /*Android 12 이상
+    ** APP 종료 수순
+    * onPause [appPause() : OnResumeJobService 취소 처리, webViewPause()] →
+        onStop [onDestroyJobInfo() : 10분 지연 finish()] →
+        onDestroy [ appDestroy() ]
+    ** APP 시작 수순
+    * onCreate() [appCreate()] →
+        onStart() [ OverView, 잠금화면 상황은 여기부터 시작함 ] →
+        onResume() [ appOpen() : onDestroyJobInfo 취소 처리, webViewResume()
+            onResumeJobInfo() : 0.5초 지연 + 권한 검사 후, 페어링기기 자동연결 ]
+    * */
+
+    /*Android 12 미만
+    ** APP 종료 수순
+    * onPause [appPause() : OnResumeJobService 취소 처리, webViewPause()] →
+        onStop →
+        onDestroy [ onDestroyJobInfo() : 10분 지연 appDestroy() ]
+      *
+    * onPause[appPause()] -> onStop -> onDestroy -> jobService [ appDestroy() ]
+    ** APP 시작 수순
+    * onCreate() [appCreate()] →
+        onStart() [ OverView, 잠금화면 상황은 여기부터 시작함 ] →
+        onResume() [ appOpen() : onDestroyJobInfo 취소 처리, webViewResume()
+            onResumeJobInfo() : 0.5초 지연 + 권한 검사 후, 페어링기기 자동연결 ]
+    * */
     override fun onStop() {
         super.onStop()
         Log.i(mainLogTag, "onStop")
         Toast.makeText(this,"onStop", Toast.LENGTH_SHORT).show()
-        finish() // 안드로이드 12 이상 부터는 finish() 함수를 통해서 종료 되야지 onDestroy 가 호출됨
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (jobScheduler.schedule(onDestroyJobInfo) == JobScheduler.RESULT_SUCCESS) {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 성공")
+            } else {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 실패")
+            }
+        }else{
+            // Android 12 미만은 자동으로 onDestroy 빠지니까 onDestroy서 처리
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(mainLogTag, "onDestroy START")
+        Log.i(mainLogTag, "onDestroy")
         Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
-        appClose()
-        Log.i(mainLogTag, "onDestroy END")
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // 이미 10분 기다리고 온경우
+            appDestroy()
+        }else{
+            // 이제 10분 기다리고 동작하는 경우
+            if (jobScheduler.schedule(onDestroyJobInfo) == JobScheduler.RESULT_SUCCESS) {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 성공")
+            } else {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 실패")
+            }
+        }
     }
 
     override fun onBackPressed() {
@@ -362,7 +451,6 @@ OverView 에서 다시 앱 킬 시
             webView.goBack()
         } else {
             super.onBackPressed()
-            finish() // 안드로이드 12 이상 부터는 finish() 함수를 통해서 종료 되야지 onDestroy 가 호출됨
         }
 
         // TODO: 김쿤네 회사 onBackPressed 작업 List

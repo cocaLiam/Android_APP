@@ -22,24 +22,21 @@ class SecureStorageController(context: Context) {
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    fun saveSecureStorage() {
-        // 데이터 저장
-        with(encryptedSharedPreferences.edit()) {
-            putString("accessToken", "exampleAccessToken") // Access Token 저장
-            putBoolean("isLoggedIn", true) // 로그인 상태 저장
-            apply()
-        }
+    fun loadSecureStorage():String {
+        // 데이터 읽기  , 실패시 "" 값 리턴
+        return encryptedSharedPreferences.getString("accessToken", "") ?: ""
     }
 
-    fun loadSecureStorage() {
-        // 데이터 읽기
-        val accessToken = encryptedSharedPreferences.getString("accessToken", null)
-        val isLoggedIn = encryptedSharedPreferences.getBoolean("isLoggedIn", false)
-
-        if (isLoggedIn) {
-            println("Access Token: $accessToken")
-        } else {
-            println("로그인이 필요합니다.")
+    fun saveSecureStorage(tokenJsonStringObject: String):Boolean {
+        // 데이터 저장
+//        with(encryptedSharedPreferences.edit()) {
+//            putString("accessToken", tokenJsonStringObject) // Access Token 저장
+//            apply()
+//        }
+        val isSuccess = with(encryptedSharedPreferences.edit()) {
+            putString("accessToken", tokenJsonStringObject)
+            commit()  // apply() 대신 commit() 사용
         }
+        return isSuccess
     }
 }

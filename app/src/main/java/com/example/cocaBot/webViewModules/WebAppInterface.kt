@@ -35,6 +35,7 @@ import kotlin.reflect.KProperty1
 
 // Custom Package
 import com.example.cocaBot.MainActivity
+import com.example.cocaBot.localStorageModules.SecureStorageController
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -78,6 +79,7 @@ class WebAppInterface(
     private val coroutineScope: CoroutineScope
 ) {
     private val webAppInterFaceTag = " - WebAppInterface"
+    private val localStorageController: SecureStorageController = SecureStorageController(mainActivity)
 //    private val webViewRef = WeakReference(webView) // WebView를 WeakReference로 감싸기
 //    private val context = WeakReference(context)
 
@@ -108,8 +110,9 @@ class WebAppInterface(
 
 /**
 ====================================================================================================
- * Web(client) -> APP(server) API 호출
- * Web에서 App으로 데이터를 전달받는 인터페이스
+ * Web(client) --reqXXX--> APP(server) API 호출
+ * Request Type
+ * Web에서 App으로 Data를 요청하는 Request Interface
  */
     @JavascriptInterface
     fun reqScanStart() {
@@ -286,6 +289,12 @@ class WebAppInterface(
         Log.i(webAppInterFaceTag, "reqReadData Down")
     }
 
+/**
+====================================================================================================
+ * Web(client) --pubXXX--> APP(server) API 호출
+ * Publisher Type
+ * Web에서 App으로 Data를 보내는 publisher Interface
+ */
     @JavascriptInterface
     fun pubReloadWebView() {
         Log.i(webAppInterFaceTag, "pubReloadWebView UP")
@@ -343,13 +352,38 @@ class WebAppInterface(
         Log.d(webAppInterFaceTag, "pubSendData CALL , jsonString : $jsonString")
     }
 
-
-    /**
+/**
 ====================================================================================================
- * APP(client) -> Web(server) 데이터 전달
- * 1. Response 타입 , 2. Subscribe 타입
- * 1. Response 타입 : Web(req) --> App(res) --> Web
- * 2. Subscribe 타입 : App(publish) --> Web
+ * Web(server) --getXXX--> APP(client) 데이터 전달
+ *   ↑                      ↓
+ *   └--------return--------┘
+ * Getter Type
+ * Web 이 요청한 Data 를 Reutrn 시켜주는 Getter Interface
+ */
+    @JavascriptInterface
+    fun getLocalStorageToken():String {
+        Log.i(webAppInterFaceTag,"getLocalStorageToken UP DOWN")
+        Log.i(webAppInterFaceTag, "data : ${localStorageController.loadSecureStorage()}")
+        return localStorageController.loadSecureStorage()
+    }
+
+/**
+====================================================================================================
+ * Web(server) --setXXX--> APP(client) 데이터 전달
+ * setter Type
+ * Web 이 지정한 Data 를 저장하는 Setter Interface
+ */
+    @JavascriptInterface
+    fun setLocalStorageToken(jsonString: String): Boolean {
+        Log.i(webAppInterFaceTag,"setLocalStorageToken UP DOWN")
+        return localStorageController.saveSecureStorage(jsonString)
+    }
+
+/**
+====================================================================================================
+ * APP(client) --resXXX--> Web(server) 데이터 전달
+ * Response Type
+ * APP 이 Web의 Request에 맞춰 답변하는 Response Interface
  */
     fun resScanStart(dataToSend: DeviceList) {
         Log.i(webAppInterFaceTag,"resScanStart UP")
@@ -552,7 +586,12 @@ class WebAppInterface(
 
         Log.i(webAppInterFaceTag,"resReadData DOWN")
     }
-
+/**
+====================================================================================================
+ * APP(client) --subXXX--> Web(server) 데이터 전달
+ * Subscriber Type
+ * APP이 구독된 Data 를 보내는 Subscriber Interface
+ */
     // TODO : Observe 기능 이용해서 값이 바뀌면 자동으로 App -> Web 쏘는 기능
     fun subObserveData(dataToSend: Map<String,String>){
         Log.i(webAppInterFaceTag,"subObserveData UP")

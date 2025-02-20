@@ -47,7 +47,7 @@ import kotlin.reflect.full.declaredFunctions
 // Custom Package
 
 
-class BleController(private val context: Context, private val coroutineScope: CoroutineScope) {
+class BleController(private val context: Context) {
     // BLE 관련 멤버 변수
     private lateinit var bluetoothManager: BluetoothManager
     lateinit var bluetoothAdapter: BluetoothAdapter
@@ -173,9 +173,20 @@ class BleController(private val context: Context, private val coroutineScope: Co
     fun removeGattServer(macAddress: String, msg: String) {
         Log.i(logTagBleController,"삭제 요청자 MSG : $msg")
         Log.i(logTagBleController, "GATT MAP 삭제 시도 : ${gtMap.keys().toList()}")
-        gtMap.remove(macAddress)
+        try {
+            gtMap[macAddress]?.disconnect()
+            gtMap[macAddress]?.close()
+            gtMap.remove(macAddress)
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
+            return
+        } catch (e:Exception){
+            Log.e(logTagBleController, "removeGattServer 함수 실패 : ${macAddress} : ${e.message}")
+            return
+        }
         Log.i(logTagBleController, "GATT MAP 삭제 결과 : ${gtMap.keys().toList()}")
     }
+
     fun getGattServer(macAddress: String): BluetoothGatt? {
         try {
             val device: BluetoothDevice = getBluetoothDevice(macAddress) ?: throw Exception("getBluetoothDevice 실패")
@@ -320,7 +331,7 @@ class BleController(private val context: Context, private val coroutineScope: Co
             // GATT 서버에 연결 시도
             val gtServer: BluetoothGatt = device.connectGatt(
                 context, false, object : BluetoothGattCallback() {
-                    // GATT 연결 상태가 변경되었을 때 호출되는 콜백
+                    // GAP 연결 시도 결과 콜백
                     override fun onConnectionStateChange(
                         gatt: BluetoothGatt,
                         status: Int,
@@ -329,27 +340,28 @@ class BleController(private val context: Context, private val coroutineScope: Co
                         super.onConnectionStateChange(gatt, status, newState)
                         when (newState) {
                             BluetoothProfile.STATE_CONNECTED -> {
-                                // GATT 서버에 연결 성공
+                                // GAP 서버에 연결 성공
+                                Log.d(logTagBleController, "GAP 서버에 연결되었습니다.${newState}")
 
+                                Log.d(logTagBleController, "GATT 연결 시도중 ...${gatt}")
                                 // GATT 전송 버퍼 크기 지정
                                 gatt.requestMtu(247)
-                                if (!gatt.discoverServices()) { // GATT 서비스 검색 실패시 // 사실 onServicesDiscovered 콜백에서도 다루므로 필요하진 않다
+                                if (!gatt.discoverServices()) { // GATT 서비스 검색 실패
                                     throw Exception("GATT Service 검색 실패")
                                 }
 
-                                Log.d(logTagBleController, "GATT 서버에 연결되었습니다.${gatt}")
                                 onGattServiceResultCallback(true)
                             }
 
                             BluetoothProfile.STATE_DISCONNECTED -> {
                                 // GATT 서버 연결 해제
-                                Log.d(logTagBleController, "GATT 서버 연결이 해제되었습니다.${gatt}")
+                                Log.d(logTagBleController, "GAP 서버 연결이 해제되었습니다. : $newState")
                                 onGattServiceResultCallback(false)
                             }
 
                             else -> {
-                                Log.w(logTagBleController, "알 수 없는 GATT 상태: $newState")
-                                useToastOnSubThread("알 수 없는 GATT 상태: $newState")
+                                Log.w(logTagBleController, "알 수 없는 GAP 상태: $newState")
+                                useToastOnSubThread("알 수 없는 GAP 상태: $newState")
                             }
                         }
                     }
@@ -690,8 +702,6 @@ class BleController(private val context: Context, private val coroutineScope: Co
         val gt = getGattServer(macAddress)
         gt ?: return false
         try {
-            gt.disconnect()
-            gt.close()
             removeGattServer(macAddress, "disconnectDevice")
             return true
         } catch (e: SecurityException) {
@@ -718,9 +728,8 @@ class BleController(private val context: Context, private val coroutineScope: Co
 
             for (bleDevice: BluetoothDevice in connectedDevices) {
                 val gt = getGattServer(bleDevice.address)
-                gt ?: throw Exception("${bleDevice.address}, ${bleDevice.name} 의 GATT 서버 구성이 안돼어 있음")
-                gt.disconnect()
-                gt.close()
+                gt ?: throw Exception("${bleDevice.address}, ${bleDevice.name} 의 GATT 서버 구성이 안되어 있음")
+                Log.d(logTagBleController, "디버깅중 <: Disconnect 시 service 확인 , ${gt.services}")
                 removeGattServer(bleDevice.address, "disconnectAllDevices")
             }
         } catch (e: SecurityException) {

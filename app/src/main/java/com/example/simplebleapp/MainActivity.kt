@@ -181,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         // Disconnect 버튼 클릭 리스너
         btnDisconnect.setOnClickListener{
             bleController.disconnectAllDevices()
+            Toast.makeText(this, "Disconnect ALL", Toast.LENGTH_SHORT).show()
         }
 
         // 저장된 상태 불러오기
@@ -219,8 +220,11 @@ class MainActivity : AppCompatActivity() {
         // ( 트리거 : APP )
         // 기기에 Info Request 를 해서 받는 Read Data
         btnRequestReadData.setOnClickListener {
-            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
-            bleController.requestReadData(macAddress.address)
+            for(tmp in bleController.getConnectedDevices()){
+                bleController.requestReadData(tmp.address)
+            }
+//            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
+//            bleController.requestReadData(macAddress.address)
         }
 
         // LiveData 관찰 설정
@@ -261,6 +265,9 @@ class MainActivity : AppCompatActivity() {
             bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
                     Log.i(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 성공")
+//                    for(tmp in bleController.getConnectedDevices()){
+//                        bleController.requestReadData(tmp.address)
+//                    }
                 } else {
                     Log.w(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 실패")
                 }
@@ -357,7 +364,7 @@ class MainActivity : AppCompatActivity() {
 //        handler.removeCallbacks(delayOnDestroyCallback)
 //        handler.removeCallbacksAndMessages("onDestroy")
         // onResume 자동 연결 콜백
-        handler.postDelayed(delayOnResumeCallback, 2000)
+        handler.postDelayed(delayOnResumeCallback, 1000)
 //        handler.postDelayed(delayOnResumeCallback,"onResume", 2000)
     }
 

@@ -12,11 +12,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="50dp"
+        android:layout_marginTop="20dp"
         android:text="Scan Start"
         android:background="@android:color/holo_blue_light"
         android:textColor="@android:color/white"
-        android:padding="10dp"
+        android:padding="5dp"
         android:textSize="16sp" />
 
     <!-- Paring Check 버튼 -->
@@ -25,12 +25,12 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_toEndOf="@id/btn_scan_start"
-        android:layout_marginStart="16dp"
+        android:layout_marginStart="20dp"
         android:layout_alignTop="@id/btn_scan_start"
         android:text="Paring check"
         android:background="@android:color/holo_blue_light"
         android:textColor="@android:color/white"
-        android:padding="10dp"
+        android:padding="5dp"
         android:textSize="16sp" />
 
     <!-- 데이터 입력창 -->
@@ -40,7 +40,7 @@
         android:layout_height="wrap_content"
         android:layout_below="@id/btn_scan_start"
         android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="2dp"
         android:hint="Enter data to send" />
 
     <!-- 데이터 전송 버튼 -->
@@ -50,7 +50,7 @@
         android:layout_height="wrap_content"
         android:layout_alignTop="@id/et_input_data"
         android:layout_toEndOf="@id/et_input_data"
-        android:layout_marginStart="8dp"
+        android:layout_marginStart="10dp"
         android:text="Send Data" />
 
     <!-- [ 기기로 부터 info 요청 ] Read Data Request 버튼 -->
@@ -60,18 +60,18 @@
         android:layout_height="wrap_content"
         android:layout_below="@id/et_input_data"
         android:layout_centerHorizontal="true"
-        android:layout_marginTop="20dp"
+        android:layout_marginTop="5dp"
         android:text="Request Read Data" />
 
     <!-- [ Notification 읽기 ] 데이터 수신 출력창 -->
     <EditText
         android:id="@+id/et_output_data"
-        android:layout_width="379dp"
-        android:layout_height="226dp"
+        android:layout_width="410dp"
+        android:layout_height="380dp"
         android:layout_below="@id/btn_request_read_data"
-        android:layout_marginStart="16dp"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginStart="4dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="4dp"
         android:background="@android:color/darker_gray"
         android:enabled="false"
         android:focusable="false"
@@ -84,13 +84,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/et_output_data"
-        android:layout_marginTop="20dp"
-        android:layout_marginEnd="16dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginEnd="5dp"
         android:layout_alignParentEnd="true"
         android:text="Disconnect"
         android:background="@android:color/holo_red_light"
         android:textColor="@android:color/white"
-        android:padding="10dp"
+        android:padding="5dp"
         android:textSize="16sp" />
 
     <!-- 자동 연결 모드 ON 토글 -->
@@ -99,14 +99,14 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_below="@id/et_output_data"
-        android:layout_marginTop="20dp"
-        android:layout_marginStart="16dp"
+        android:layout_marginTop="5dp"
+        android:layout_marginStart="5dp"
         android:layout_alignParentStart="true"
         android:textOn="자동 연결 모드 ON"
         android:textOff="자동 연결 모드 OFF"
         android:background="@android:color/holo_green_light"
         android:textColor="@android:color/white"
-        android:padding="10dp"
+        android:padding="5dp"
         android:textSize="16sp" />
 
 </RelativeLayout>

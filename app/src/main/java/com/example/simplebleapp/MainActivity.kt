@@ -1,7 +1,9 @@
 package com.example.simplebleapp
 
 // Operator Pack
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothGatt
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
@@ -37,6 +39,10 @@ import androidx.lifecycle.Observer
 // Custom Package
 import com.example.simplebleapp.bleModules.ScanListAdapter
 import com.example.simplebleapp.bleModules.BleController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
@@ -63,6 +69,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etOutputData: EditText
     private lateinit var btnSendData: Button
     private lateinit var btnRequestReadData: Button
+
+    // 비동기 작업을 위한 코루틴 스코프(코루틴 전용스레드 공간 정도) 선언
+    private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
 
     // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
     private val handler = MyContextData.handler
@@ -210,7 +219,10 @@ class MainActivity : AppCompatActivity() {
             if (inputData.isNotEmpty()) {
                 val dataToSend = inputData.toByteArray() // 문자열을 ByteArray로 변환
                 val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
-                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
+                coroutineScope.launch {
+                    bleController.writeData(dataToSend, macAddress.address)
+                }
+//                bleController.writeData(dataToSend, macAddress.address) // BLE로 데이터 전송
                 Toast.makeText(this, "Data Sent: $inputData", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(this, "Please enter data to send", Toast.LENGTH_SHORT).show()
@@ -221,7 +233,21 @@ class MainActivity : AppCompatActivity() {
         // 기기에 Info Request 를 해서 받는 Read Data
         btnRequestReadData.setOnClickListener {
             for(tmp in bleController.getConnectedDevices()){
-                bleController.requestReadData(tmp.address)
+//                bleController.requestReadData(tmp.address)
+
+
+                // onCharacteristicRead 에서 호출될 Lamda 함수 등록
+                bleController.onRequestDataListener = { device, byteArrayString, status ->
+                    if (status == BluetoothGatt.GATT_SUCCESS) {
+                        Log.d("LambdaHandler", "READ DATA SUCCESS")
+                    }else{
+                        Log.w("LambdaHandler", "READ DATA FAIL")
+                    }
+                }
+
+                coroutineScope.launch {
+                    bleController.requestReadData(tmp.address)
+                }
             }
 //            val macAddress: BluetoothDevice = bleController.getConnectedDevices()[0]
 //            bleController.requestReadData(macAddress.address)
@@ -259,6 +285,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     // BLE Connect 권한 검사 메서드
+    @SuppressLint("MissingPermission")
     private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
         if(bleController.requestBlePermission(this)){
             // 블루투스 권한이 이미 있는 경우

@@ -48,9 +48,6 @@ import com.example.cocaBot.webViewModules.WebAppInterface
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 import com.example.cocaBot.services.OnDestroyJobService
 import com.example.cocaBot.services.OnResumeJobService
@@ -59,8 +56,7 @@ import android.app.job.JobScheduler
 import android.content.ComponentName
 import android.content.Context
 import android.os.Build
-import com.example.cocaBot.services.OnDestroyJobService.Companion.jobServiceLogTag
-
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     // BLE 관련 변수들
@@ -81,7 +77,7 @@ class MainActivity : AppCompatActivity() {
     private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
 
     // 기타 등등 변수들
-    private val mainLogTag = " - MainActivity "
+    private val MAIN_LOG_TAG = " - MainActivity "
 
     // JobService 객체
     private lateinit var jobScheduler: JobScheduler
@@ -172,7 +168,7 @@ class MainActivity : AppCompatActivity() {
         hybridAppBridge.initializeWebView()
 
         // 특정 URL 로드
-        val url = "http://192.168.45.125:3000?timestamp=${System.currentTimeMillis()}"
+        val url = "http://192.168.45.219:3000?timestamp=${System.currentTimeMillis()}"
     //        val url = "http://192.168.45.193:3000"
     //        val url = "app.cocabot.com"
         hybridAppBridge.loadUrl(url)
@@ -232,9 +228,7 @@ class MainActivity : AppCompatActivity() {
         // OnDestroyJobService JobService 취소 처리
         jobScheduler.cancel(OnDestroyJobService.JOB_ID)
 
-        // TODO : TEST >> 실행시킬 스케쥴 취소 후 재등록
-        jobScheduler.cancel(OnResumeJobService.JOB_ID)
-        // TODO : TEST
+//        jobScheduler.cancel(OnResumeJobService.JOB_ID)
 
         webViewResume(webView)
     }
@@ -243,19 +237,18 @@ class MainActivity : AppCompatActivity() {
         // OnResumeJobService JobService 취소 처리
         jobScheduler.cancel(OnResumeJobService.JOB_ID)
 
-        // TODO : TEST >> 실행시킬 스케쥴 취소 후 재등록
-        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
-        // TODO : TEST
+//        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
 
         webViewPause(webView)
     }
 
     fun appDestroy(){
-        Log.i(mainLogTag, "appDestroy 실행 ")
-        bleController.disconnectAllDevices()
+        Log.i(MAIN_LOG_TAG, "appDestroy 실행 ")
+        coroutineScope.launch {
+            bleController.disconnectAllDevices()
+            Log.i(MAIN_LOG_TAG, "appDestroy 종료 ")
+        }
         webViewDestroy(webView)
-
-        Log.i(mainLogTag, "appDestroy 종료 ")
     }
 
     fun jobServiceOnDestroy(){
@@ -350,8 +343,8 @@ OverView 에서 다시 앱 킬 시
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContentView(R.layout.activity_main)
-        Log.i(mainLogTag, "onCreate")
-        Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onCreate")
+//        Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
 
         appCreate()
     }
@@ -360,14 +353,14 @@ OverView 에서 다시 앱 킬 시
         super.onStart()
         // 액티비티가 사용자에게 보여지기 직전에 호출
         // APP 시작시 자동 실행하는 작업들
-        Log.i(mainLogTag, "onStart")
-        Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onStart")
+//        Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
     }
 
     override fun onResume() {
         super.onResume()
-        Log.i(mainLogTag, "onResume")
-        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onResume")
+//        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
 
         appOpen()
 
@@ -380,8 +373,8 @@ OverView 에서 다시 앱 킬 시
 
     override fun onPause() {
         super.onPause()
-        Log.i(mainLogTag, "onPause")
-        Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onPause")
+//        Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
 
         appPause()
     }
@@ -413,8 +406,8 @@ OverView 에서 다시 앱 킬 시
     * */
     override fun onStop() {
         super.onStop()
-        Log.i(mainLogTag, "onStop")
-        Toast.makeText(this,"onStop", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onStop")
+//        Toast.makeText(this,"onStop", Toast.LENGTH_SHORT).show()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (jobScheduler.schedule(onDestroyJobInfo) == JobScheduler.RESULT_SUCCESS) {
@@ -429,8 +422,8 @@ OverView 에서 다시 앱 킬 시
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.i(mainLogTag, "onDestroy")
-        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
+        Log.i(MAIN_LOG_TAG, "onDestroy")
+//        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             // 이미 10분 기다리고 온경우
@@ -446,7 +439,7 @@ OverView 에서 다시 앱 킬 시
     }
 
     override fun onBackPressed() {
-        Log.i(mainLogTag, "onBackPressed :  ${webView.canGoBack()}")
+        Log.i(MAIN_LOG_TAG, "onBackPressed :  ${webView.canGoBack()}")
         if (webView.canGoBack()) {
             webView.goBack()
         } else {
@@ -489,14 +482,14 @@ OverView 에서 다시 앱 킬 시
         }
 
         // 블루투스 권한 통과
-        Log.i(mainLogTag, " targetDevice : ${targetDevice}")
+        Log.i(MAIN_LOG_TAG, " targetDevice : ${targetDevice}")
         bleController.connectToDevice(targetDevice, { isConnected ->
-            Log.i(mainLogTag,"isConnected : $isConnected")
+            Log.i(MAIN_LOG_TAG,"isConnected : $isConnected")
             if (isConnected) {
                 if(isAutoConnection){
                     // WEB 에서 reqConnectedDevices 호출로 화면 갱신
                     // <- 그대로 이용해서 AutoConnection 시 WEB UI 화면 갱신 용도
-                    Log.i(mainLogTag,"isConnected : $isConnected")
+                    Log.i(MAIN_LOG_TAG,"isConnected : $isConnected")
                     webAppInterface.reqConnectedDevices()
 //                        webAppInterface.resAutoConnect(DeviceInfo(
 //                            macAddress = selectedDevice.address,
@@ -507,7 +500,7 @@ OverView 에서 다시 앱 킬 시
                         deviceType = targetDevice.name))
                 }
             } else {
-                Log.w(mainLogTag, "${targetDevice.name} 기기 연결 끊어짐")
+                Log.w(MAIN_LOG_TAG, "${targetDevice.name} 기기 연결 끊어짐")
             }
         })
 
@@ -556,15 +549,15 @@ OverView 에서 다시 앱 킬 시
         if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
             when (requestCode) {
                 101 -> { // BLE 스캔 권한 요청 결과
-                    Log.i(mainLogTag, "블루투스 스캔 권한이 허용되었습니다.")
+                    Log.i(MAIN_LOG_TAG, "블루투스 스캔 권한이 허용되었습니다.")
                     bleController.permissionStatus.bluetoothScanPermission = true
                 }
                 102 -> { // 위치 권한 요청 결과
-                    Log.i(mainLogTag, "위치 권한이 허용되었습니다.")
+                    Log.i(MAIN_LOG_TAG, "위치 권한이 허용되었습니다.")
                     bleController.permissionStatus.locationPermission = true
                 }
                 103 -> { // BLE 연결 권한 요청 결과
-                    Log.i(mainLogTag, "블루투스 연결 권한이 허용되었습니다.")
+                    Log.i(MAIN_LOG_TAG, "블루투스 연결 권한이 허용되었습니다.")
                     bleController.permissionStatus.bluetoothConnectPermission = true
                 }
             }
@@ -572,17 +565,17 @@ OverView 에서 다시 앱 킬 시
             // 권한이 거부된 경우
             when (requestCode) {
                 101 -> {
-                    Log.e(mainLogTag, "블루투스 스캔 권한이 거부되었습니다.")
+                    Log.e(MAIN_LOG_TAG, "블루투스 스캔 권한이 거부되었습니다.")
                     bleController.permissionStatus.bluetoothScanPermission = false
                     Toast.makeText(this, "블루투스 스캔 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
                 102 -> {
-                    Log.e(mainLogTag, "위치 권한이 거부되었습니다.")
+                    Log.e(MAIN_LOG_TAG, "위치 권한이 거부되었습니다.")
                     bleController.permissionStatus.locationPermission = false
                     Toast.makeText(this, "위치 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
                 103 -> {
-                    Log.e(mainLogTag, "블루투스 연결 권한이 거부되었습니다.")
+                    Log.e(MAIN_LOG_TAG, "블루투스 연결 권한이 거부되었습니다.")
                     bleController.permissionStatus.bluetoothConnectPermission = false
                     Toast.makeText(this, "블루투스 연결 권한이 거부되었습니다.", Toast.LENGTH_SHORT).show()
                 }
@@ -628,17 +621,17 @@ OverView 에서 다시 앱 킬 시
             scannedBluetoothDevice.add(device)
             webAppInterface.resScanStart(scanList)
 
-            Log.d(mainLogTag,"scanList >>>> $scanList")
+            Log.d(MAIN_LOG_TAG,"scanList >>>> $scanList")
         }
 
 
         override fun onScanFailed(errorCode: Int) {
-            Log.e(mainLogTag, "onScanFailed called with errorCode: $errorCode")
+            Log.e(MAIN_LOG_TAG, "onScanFailed called with errorCode: $errorCode")
             when (errorCode) {
-                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(mainLogTag, "Scan already started")
-                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(mainLogTag, "App registration failed")
-                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(mainLogTag, "Internal error")
-                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(mainLogTag, "Feature unsupported")
+                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(MAIN_LOG_TAG, "Scan already started")
+                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
+                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
+                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
             }
             Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
         }

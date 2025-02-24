@@ -70,7 +70,7 @@ class BleController(private val context: Context) {
 
     // 권한 상태를 저장하는 Map
     val permissionStatus = PermissionStatus()
-    var onRequestDataListner: ((device: BluetoothDevice, receivedData: String, status: Int) -> Unit)? =
+    var onRequestDataListener: ((device: BluetoothDevice, receivedData: String, status: Int) -> Unit)? =
         null
 
     // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
@@ -171,11 +171,10 @@ class BleController(private val context: Context) {
     }
 
     fun removeGattServer(macAddress: String, msg: String) {
-        Log.i(logTagBleController,"삭제 요청자 MSG : $msg")
         Log.i(logTagBleController, "GATT MAP 삭제 시도 : ${gtMap.keys().toList()}")
         try {
             gtMap[macAddress]?.disconnect()
-            gtMap[macAddress]?.close()
+            gtMap[macAddress]?.close()  // DISCONNECT 콜백에서 호출로 변경
             gtMap.remove(macAddress)
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
@@ -187,37 +186,40 @@ class BleController(private val context: Context) {
         Log.i(logTagBleController, "GATT MAP 삭제 결과 : ${gtMap.keys().toList()}")
     }
 
-    fun getGattServer(macAddress: String): BluetoothGatt? {
+    fun reDiscoverGattService(gt: BluetoothGatt){
         try {
-            val device: BluetoothDevice = getBluetoothDevice(macAddress) ?: throw Exception("getBluetoothDevice 실패")
-            val gt: BluetoothGatt? = gtMap[macAddress]
+            gt.discoverServices()
+        } catch (e: SecurityException) {
+            Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
+            return
+        } catch (e:Exception){
+            Log.e(logTagBleController, "reDiscoverGattService 함수 실패 : ${e.message}")
+            return
+        }
+    }
 
-            //TODO : 디버깅중 << 무조건 새로 GATT 연결하게끔 해서 테스트중
-            // 기존 연결이 있고 정상적으로 연결된 상태인 경우
+    suspend fun getGattServer(macAddress: String): BluetoothGatt? {
+        try {
+            if (gtMap[macAddress] === null) return null
+
 //            if (gtServer?.getConnectionState(device) == BluetoothProfile.STATE_CONNECTED) {
-            if (bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED) {
-                if(gt != null){
-                    Log.i(logTagBleController,"GATT 기존 서버 사용 $gt")
-                    return gt
-                } else Log.w(logTagBleController,"GATT 서버 재접속 $gt")
-            }
-
-            // 연결이 없거나 끊어진 경우 새로 연결
-            device.let { bleDevice ->
-                val newGt: BluetoothGatt? = connectToDevice(bleDevice, { isConnected ->
-                    Log.i(logTagBleController, "isConnected : $isConnected")
-                    if (isConnected) {
-                        Log.i(logTagBleController, "${device.name} 기기 연결 성공")
-                    } else {
-                        Log.e(logTagBleController, "${device.name} 기기 연결 끊어짐")
-                    }
-                })
-
-                Log.d(logTagBleController,"gtMap $gtMap")
-                if (newGt != null) {
-                    gtMap[macAddress] = newGt
-                    return newGt
-                }else return null
+//            if (bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED) {
+            if(gtMap[macAddress]!!.services.isEmpty()){
+                gtMap[macAddress]!!.discoverServices()
+                Log.w(logTagBleController,"GATT 서버 재접속중 ... $gtMap[macAddress]")
+                // 서비스 검색이 완료될 때까지 대기
+                var attempts = 0
+//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
+                while ((gtMap[macAddress]!!.services).isEmpty() && attempts < 20) {
+                    Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gtMap[macAddress]!!.services}")
+                    attempts++
+                    delay(100)  // 0.1초씩 최대 2초 대기
+                }
+                if((gtMap[macAddress]!!.services).isEmpty()) return null
+                return gtMap[macAddress]
+            }else{
+                Log.i(logTagBleController,"GATT 기존 서버 사용 $gtMap[macAddress]")
+                return gtMap[macAddress]
             }
 
         } catch (e: SecurityException) {
@@ -233,15 +235,6 @@ class BleController(private val context: Context) {
         return try {
             val gt = getGattServer(macAddress) ?: return null
             Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
-
-            // 서비스 검색이 완료될 때까지 대기
-            var attempts = 0
-//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
-            while ((gt.services).isEmpty() && attempts < 20) {
-                Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
-                attempts++
-                delay(100)  // 0.1초씩 최대 2초 대기
-            }
 
             val service = gt.getService(serviceUuid)
 
@@ -261,15 +254,6 @@ class BleController(private val context: Context) {
         return try {
             val gt = getGattServer(macAddress) ?: return null
             Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
-
-            // 서비스 검색이 완료될 때까지 대기
-            var attempts = 0
-//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
-            while ((gt.services).isEmpty() && attempts < 20) {
-                Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
-                attempts++
-                delay(100)  // 0.1초씩 최대 2초 대기
-            }
 
             val service = gt.getService(serviceUuid)
             Log.d(logTagBleController,"디버깅중 < service :${service} ${serviceUuid}")
@@ -330,7 +314,7 @@ class BleController(private val context: Context) {
 
             // GATT 서버에 연결 시도
             val gtServer: BluetoothGatt = device.connectGatt(
-                context, false, object : BluetoothGattCallback() {
+                context, true, object : BluetoothGattCallback() {
                     // GAP 연결 시도 결과 콜백
                     override fun onConnectionStateChange(
                         gatt: BluetoothGatt,
@@ -343,9 +327,11 @@ class BleController(private val context: Context) {
                                 // GAP 서버에 연결 성공
                                 Log.d(logTagBleController, "GAP 서버에 연결되었습니다.${newState}")
 
-                                Log.d(logTagBleController, "GATT 연결 시도중 ...${gatt}")
+                                Log.d(logTagBleController, "GATT 연결 시도중 ... gatt : ${gatt}")
                                 // GATT 전송 버퍼 크기 지정
                                 gatt.requestMtu(247)
+                                val result = gatt.discoverServices()
+                                Log.d(logTagBleController, "GATT 연결 시도중 ... result : ${result}")
                                 if (!gatt.discoverServices()) { // GATT 서비스 검색 실패
                                     throw Exception("GATT Service 검색 실패")
                                 }
@@ -355,7 +341,7 @@ class BleController(private val context: Context) {
 
                             BluetoothProfile.STATE_DISCONNECTED -> {
                                 // GATT 서버 연결 해제
-                                Log.d(logTagBleController, "GAP 서버 연결이 해제되었습니다. : $newState")
+                                Log.d(logTagBleController, "GAP 서버 연결이 해제되었습니다. : $gatt")
                                 onGattServiceResultCallback(false)
                             }
 
@@ -374,6 +360,7 @@ class BleController(private val context: Context) {
                         // GATT 서비스 검색
                         if (status != BluetoothGatt.GATT_SUCCESS) {
                             Log.e(logTagBleController, "GATT 서비스 검색 실패: $status")
+//                            Log.e(logTagBleController, "GATT CLOSE ${gatt.close()}")
                             useToastOnSubThread("GATT 서비스 검색 실패: $status")
                             return
                         }
@@ -522,6 +509,9 @@ class BleController(private val context: Context) {
                             Log.i(logTagBleController, "데이터 전송 성공: $status")
                         } else {
                             Log.e(logTagBleController, "데이터 전송 실패: $status")
+                            Log.d(logTagBleController, "디버깅중 < writeData 실패로 인해 GATT 서비스 재검색")
+                            //TODO: 실패시 재시도 할지 정해야함
+                            reDiscoverGattService(gatt)
                         }
                     }
                 }
@@ -549,7 +539,7 @@ class BleController(private val context: Context) {
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                gt.writeCharacteristic(
+                val result:Int = gt.writeCharacteristic(
                     writeChar,
                     data,
                     BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
@@ -557,7 +547,7 @@ class BleController(private val context: Context) {
             }else{
                 writeChar.value = data
                 writeChar.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-                gt.writeCharacteristic(writeChar)
+                val result:Boolean = gt.writeCharacteristic(writeChar)
             }
         } catch (e: SecurityException){
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
@@ -585,7 +575,8 @@ class BleController(private val context: Context) {
             val success = gt.readCharacteristic(readChar)
             Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${gtMap}")
             if (!success) {
-                removeGattServer(macAddress, "requestReadData 실패로 인해 GATT 서버 삭제")
+                Log.d(logTagBleController, "디버깅중 < requestReadData 실패로 인해 GATT 서비스 재검색")
+                reDiscoverGattService(gt)
             }
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
@@ -652,9 +643,9 @@ class BleController(private val context: Context) {
 //                {Status: 1, Battery: 100}
 //                {Status: 0, Battery: 100}
             // Lambda 호출
-//                onRequestDataListner(receivedData, status)
-            Log.i(logTagBleController, "onRequestDataListner 할당 값 : ${onRequestDataListner}")
-            onRequestDataListner?.invoke(device, byteArrayString, status)
+//                onRequestDataListener(receivedData, status)
+            Log.i(logTagBleController, "onRequestDataListener 할당 값 : ${onRequestDataListener}")
+            onRequestDataListener?.invoke(device, byteArrayString, status)
 
         } else {
             // 에러 처리
@@ -697,7 +688,7 @@ class BleController(private val context: Context) {
     /**
      * 특정 기기 연결 해제
      */
-    fun disconnectDevice(macAddress: String) : Boolean {
+    suspend fun disconnectDevice(macAddress: String) : Boolean {
         hasBluetoothConnectPermission() ?: return false
         val gt = getGattServer(macAddress)
         gt ?: return false
@@ -716,7 +707,7 @@ class BleController(private val context: Context) {
     /**
      * 모든 기기 연결 해제
      */
-    fun disconnectAllDevices() {
+    suspend fun disconnectAllDevices() {
         hasBluetoothConnectPermission() ?: return
         try {
             val connectedDevices = getConnectedDevices()
@@ -744,7 +735,7 @@ class BleController(private val context: Context) {
     /**
      * 페어링된 기기 삭제
      */
-    fun removeParing(macAddress: String): Boolean {
+    suspend fun removeParing(macAddress: String): Boolean {
         hasBluetoothConnectPermission() ?: return false
 
         val gt = getGattServer(macAddress)
@@ -752,10 +743,9 @@ class BleController(private val context: Context) {
         try {
             for (bleDevice in getParingDevices()){
                 if (macAddress == bleDevice.address){
+                    removeGattServer(macAddress,"removeParing")
                     // Kotlin 리플렉션을 사용하여 메서드 호출
                     val method = bleDevice::class.declaredFunctions.find { it.name == "removeBond" }
-                    removeGattServer(macAddress,"removeParing")
-
                     return method?.call(bleDevice) as? Boolean ?: false
                 }
             }

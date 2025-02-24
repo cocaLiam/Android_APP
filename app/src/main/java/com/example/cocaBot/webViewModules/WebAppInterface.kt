@@ -158,13 +158,22 @@ class WebAppInterface(
             val gson = Gson()
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
 
-            if(bleController.disconnectDevice(deviceInfo.macAddress)){
-                resDisconnect(deviceInfo)
-            }else{
-//                deviceInfo.deviceType = ""
-                deviceInfo.macAddress = ""
-                resDisconnect(deviceInfo)
+            coroutineScope.launch {
+                if(bleController.disconnectDevice(deviceInfo.macAddress)){
+                    resDisconnect(deviceInfo)
+                }else{
+                    deviceInfo.deviceType = ""
+                    deviceInfo.macAddress = ""
+                    resDisconnect(deviceInfo)
+                }
             }
+//            if(bleController.disconnectDevice(deviceInfo.macAddress)){
+//                resDisconnect(deviceInfo)
+//            }else{
+////                deviceInfo.deviceType = ""
+//                deviceInfo.macAddress = ""
+//                resDisconnect(deviceInfo)
+//            }
 
         } catch (e: Exception) {
             Log.e(webAppInterFaceTag, "reqDisconnect JSON 변환 중 오류 발생: ${e.message}")
@@ -182,12 +191,14 @@ class WebAppInterface(
             val gson = Gson()
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
 
-            if(bleController.removeParing(deviceInfo.macAddress)){
-                resRemoveParing(deviceInfo)
-            }else{
-                deviceInfo.deviceType = ""
-                deviceInfo.macAddress = ""
-                resRemoveParing(deviceInfo)
+            coroutineScope.launch {
+                if(bleController.removeParing(deviceInfo.macAddress)){
+                    resRemoveParing(deviceInfo)
+                }else{
+                    deviceInfo.deviceType = ""
+                    deviceInfo.macAddress = ""
+                    resRemoveParing(deviceInfo)
+                }
             }
         } catch (e: Exception) {
             Log.e(webAppInterFaceTag, "reqRemoveParing JSON 변환 중 오류 발생: ${e.message}")
@@ -256,7 +267,7 @@ class WebAppInterface(
             val deviceInfo: DeviceInfo = gson.fromJson(jsonString, DeviceInfo::class.java)
 
             // onCharacteristicRead 에서 호출될 Lamda 함수 등록
-            bleController.onRequestDataListner = { device, byteArrayString, status ->
+            bleController.onRequestDataListener = { device, byteArrayString, status ->
                 if (status == BluetoothGatt.GATT_SUCCESS) {
                     Log.d("LambdaHandler", "Lambda 처리된 데이터: ${byteArrayString}")
 
@@ -316,8 +327,10 @@ class WebAppInterface(
     @JavascriptInterface
     fun pubDisconnectAllDevice() {
         Log.i(webAppInterFaceTag,"pubDisconnectAllDevice UP")
-        bleController.disconnectAllDevices()
-        Log.i(webAppInterFaceTag,"pubDisconnectAllDevice Down")
+        coroutineScope.launch {
+            bleController.disconnectAllDevices()
+            Log.i(webAppInterFaceTag,"pubDisconnectAllDevice Down")
+        }
     }
 
     @JavascriptInterface

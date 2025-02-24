@@ -10,7 +10,6 @@ class MyContextData : Application() {
     companion object {
         lateinit var instance: MyContextData
             private set
-        val handler = Handler(Looper.getMainLooper())  // 전역 handler 추가
     }
 
     override fun onCreate() {

@@ -2,6 +2,8 @@ package com.example.simplebleapp
 
 // Operator Pack
 import android.annotation.SuppressLint
+import android.app.job.JobInfo
+import android.app.job.JobScheduler
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
 import android.content.pm.PackageManager
@@ -22,6 +24,8 @@ import android.content.Intent
 // BLE Pack
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
+import android.content.ComponentName
+import android.content.Context
 import android.os.Build
 
 // dataType Pack
@@ -30,6 +34,7 @@ import android.os.Build
 import android.util.Log
 import android.widget.EditText
 import android.widget.ToggleButton
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -43,6 +48,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+import com.example.simplebleapp.services.OnDestroyJobService
+import com.example.simplebleapp.services.OnResumeJobService
 
 class MainActivity : AppCompatActivity() {
     // 1. ActivityResultLauncher를 클래스의 멤버 변수로 선언합니다.
@@ -73,31 +80,12 @@ class MainActivity : AppCompatActivity() {
     // 비동기 작업을 위한 코루틴 스코프(코루틴 전용스레드 공간 정도) 선언
     private val coroutineScope = CoroutineScope(Dispatchers.IO + Job())
 
-    // AutoConnection 처리 용도 ( onResume 에서 x초 후 연결 시도, onDestroy 에서 자동 연결 시도 콜백 취소 처리 )
-    private val handler = MyContextData.handler
-    private val delayOnResumeCallback = Runnable {
-        val pairedDevices = bleController.getParingDevices() ?: return@Runnable
-        if (pairedDevices.isNotEmpty()) {
-            Log.i(MAIN_LOG_TAG, "페어링된 기기 발견: ${pairedDevices}")
-            // 바로 연결 시도
-            for (pairedDevice in pairedDevices) {
-                val conDeviceList = bleController.getConnectedDevices()
-//                if(!(pairedDevice in conDeviceList)){}
-                if (!conDeviceList.contains(pairedDevice)) {
-                    // 이미 연결되어 있다면 재연결 시도 X
-                    connectToDeviceWithPermissionCheck(pairedDevice)
-                }
-            }
-        } else {
-            Log.i(MAIN_LOG_TAG, "페어링된 기기 없음")
-            // 필요한 경우 여기서 다른 처리
-        }
-        Log.i(MAIN_LOG_TAG, "onResume END")
-    }
+    // JobService 객체
+    private lateinit var jobScheduler: JobScheduler
+    private lateinit var onDestroyJobInfo: JobInfo
+    private lateinit var onResumeJobInfo: JobInfo
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-
+    private fun appCreate(){
         setContentView(R.layout.activity_main)
 
 // BLE 초기화 완료 -----------------------------------------------------------------------------------
@@ -189,7 +177,9 @@ class MainActivity : AppCompatActivity() {
 
         // Disconnect 버튼 클릭 리스너
         btnDisconnect.setOnClickListener{
-            bleController.disconnectAllDevices()
+            coroutineScope.launch {
+                bleController.disconnectAllDevices()
+            }
             Toast.makeText(this, "Disconnect ALL", Toast.LENGTH_SHORT).show()
         }
 
@@ -280,10 +270,212 @@ class MainActivity : AppCompatActivity() {
                 Toast.makeText(this, "No device selected", Toast.LENGTH_SHORT).show()
             }
         }
-
 // UI 초기화 완료 ------------------------------------------------------------------------------------
+// Job Service 초기화 ------------------------------------------------------------------------------
+        jobScheduler = getSystemService(Context.JOB_SCHEDULER_SERVICE) as JobScheduler
+
+        // MainActivity 인스턴스를 JobService에 전달
+        OnDestroyJobService.setMainActivity(this)
+        OnResumeJobService.setMainActivity(this)
+
+        // Job 설정
+        onDestroyJobInfo = JobInfo.Builder(OnDestroyJobService.JOB_ID,
+            ComponentName(this, OnDestroyJobService::class.java)
+        )
+//            .setMinimumLatency(10 * 60 * 1000)  // 10 분
+//            .setMinimumLatency(10 * 1000)  // 10초
+            .setMinimumLatency(5 * 1000)  // 최소 지연 시간 : 5초
+            .setOverrideDeadline(10 * 1000)  // 최대 지연 시간 : 10초
+            .build()
+
+        onResumeJobInfo = JobInfo.Builder(OnResumeJobService.JOB_ID,
+            ComponentName(this, OnResumeJobService::class.java))
+            .setMinimumLatency(5 * 100)  // 최소 지연 시간 : 0.5초
+            .setOverrideDeadline(10 * 100)  // 최대 지연 시간 : 1초
+            .build()
+// Job Service 초기화 ------------------------------------------------------------------------------
     }
 
+    private fun appOpen(){
+        // OnDestroyJobService JobService 취소 처리
+        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
+
+        jobScheduler.cancel(OnResumeJobService.JOB_ID)
+    }
+
+    fun appPause(){
+        // OnResumeJobService JobService 취소 처리
+        jobScheduler.cancel(OnResumeJobService.JOB_ID)
+
+        jobScheduler.cancel(OnDestroyJobService.JOB_ID)
+    }
+
+    fun appDestroy(){
+        Log.i(MAIN_LOG_TAG, "appDestroy 실행 ")
+        coroutineScope.launch {
+            bleController.disconnectAllDevices()
+        }
+        // BLE SCAN STOP + recycleView Clear
+        scanListAdapter.clearDevices()
+        stopBleScanAndClearScanList()
+        Log.i(MAIN_LOG_TAG, "appDestroy 종료 ")
+    }
+
+    fun jobServiceOnDestroy(){
+        Log.i(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo SERVICE 실행")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            finish()
+        }else{
+            appDestroy()
+        }
+        Log.i(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo SERVICE 실행 완료")
+    }
+
+    fun jobServiceOnResume(){
+        Log.i(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo SERVICE 실행")
+        val pairedDevices = bleController.getParingDevices() ?: mutableSetOf<BluetoothDevice>()
+        if (pairedDevices.isNotEmpty()) {
+            Log.i(OnResumeJobService.jobServiceLogTag, "페어링된 기기 발견: ${pairedDevices}")
+            // 바로 연결 시도
+            for (pairedDevice in pairedDevices) {
+                val conDeviceList = bleController.getConnectedDevices()
+//                if(!(pairedDevice in conDeviceList)){}
+                if (!conDeviceList.contains(pairedDevice)) {
+                    // 이미 연결되어 있다면 재연결 시도 X
+                    connectToDeviceWithPermissionCheck(pairedDevice)
+                }
+            }
+        } else {
+            Log.w(OnResumeJobService.jobServiceLogTag, "페어링된 기기 없음")
+            // 필요한 경우 여기서 다른 처리
+        }
+        Log.i(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo SERVICE 실행 완료")
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContentView(R.layout.activity_main)
+        Log.i(MAIN_LOG_TAG, "onCreate")
+        Toast.makeText(this,"onCreate", Toast.LENGTH_SHORT).show()
+
+        appCreate()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // 액티비티가 사용자에게 보여지기 직전에 호출
+        // APP 시작시 자동 실행하는 작업들
+        Log.i(MAIN_LOG_TAG, "onStart")
+        Toast.makeText(this, "onStart", Toast.LENGTH_SHORT).show()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.i(MAIN_LOG_TAG, "onResume")
+        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
+
+        appOpen()
+
+        if (jobScheduler.schedule(onResumeJobInfo) == JobScheduler.RESULT_SUCCESS) {
+            Log.d(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo 스케줄링 성공")
+        } else {
+            Log.d(OnResumeJobService.jobServiceLogTag, "onResumeJobInfo 스케줄링 실패")
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Log.i(MAIN_LOG_TAG, "onPause")
+        Toast.makeText(this,"onPause", Toast.LENGTH_SHORT).show()
+
+        appPause()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        Log.i(MAIN_LOG_TAG, "onStop")
+        Toast.makeText(this,"onStop", Toast.LENGTH_SHORT).show()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (jobScheduler.schedule(onDestroyJobInfo) == JobScheduler.RESULT_SUCCESS) {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 성공")
+            } else {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 실패")
+            }
+        }else{
+            // Android 12 미만은 자동으로 onDestroy 빠지니까 onDestroy서 처리
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(MAIN_LOG_TAG, "onDestroy")
+        Toast.makeText(this,"onDestroy", Toast.LENGTH_SHORT).show()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // 이미 10분 기다리고 온경우
+            appDestroy()
+        }else{
+            // 이제 10분 기다리고 동작하는 경우
+            if (jobScheduler.schedule(onDestroyJobInfo) == JobScheduler.RESULT_SUCCESS) {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 성공")
+            } else {
+                Log.d(OnDestroyJobService.jobServiceLogTag, "onDestroyJobInfo 스케줄링 실패")
+            }
+        }
+    }
+
+    private fun startBleScan() {
+        try {
+            bleController.bleScanPopup(scanCallback, popupContainer)
+            btnScanStart.visibility = View.GONE
+            btnParingCheck.visibility = View.GONE
+            toggleBtnAutoConnect.visibility = View.GONE
+            popupView.visibility = View.VISIBLE
+            popupContainer.visibility = View.VISIBLE
+        } catch (e: Exception) {
+            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
+        }
+    }
+
+    private fun stopBleScanAndClearScanList() {
+        try {
+            bleController.stopBleScan(scanCallback)
+            Log.i(MAIN_LOG_TAG, "블루투스 스캔 정지 ")
+            btnScanStart.visibility = View.VISIBLE // Scan Start 버튼 활성화
+            btnParingCheck.visibility = View.VISIBLE
+            toggleBtnAutoConnect.visibility = View.VISIBLE
+            popupView.visibility = View.GONE // 팝업 숨김
+            popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
+            scanListAdapter.clearDevices()
+        } catch (e: Exception) {
+            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
+        }
+    }
+
+    private val scanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult) {
+            val device = result.device
+            if (result.scanRecord?.deviceName == null){
+                // DeviceName 이 Null 인 경우, 스캔리스트에 추가 X
+                return
+            }else{
+                scanListAdapter.addDeviceToAdapt(device)
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e(MAIN_LOG_TAG, "onScanFailed called with errorCode: $errorCode")
+            when (errorCode) {
+                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(MAIN_LOG_TAG, "Scan already started")
+                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
+                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
+                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
+            }
+            Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
+        }
+    }
     // BLE Connect 권한 검사 메서드
     @SuppressLint("MissingPermission")
     private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
@@ -345,105 +537,4 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
-//    @RequiresApi(Build.VERSION_CODES.P)
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.i(MAIN_LOG_TAG, "onDestroy START")
-        Toast.makeText(this, "onDestroy", Toast.LENGTH_SHORT).show()
-
-/*
-* onResume -> onDestroy 시에는 onResume의 delayOnResumeCallback 지연 함수가 잘 취소가 되는데
-* onDestroy -> onResume시에는 onDestroy 의 delayOnDestroyCallback 지연 함수는 취소가 안됨
-* ( 이유 : onResume 하면서 delayOnDestroyCallback 의 참조가 새로 할당 되므로 )
-* */
-        // onResume 자동 연결 콜백 취소 처리
-        handler.removeCallbacks(delayOnResumeCallback)
-
-        // Callback 메모리 해제 + handler 객체
-        bleController.disconnectAllDevices()
-        handler.removeCallbacksAndMessages(null)
-//        handler = null
-
-        // BLE SCAN STOP + recycleView Clear
-        scanListAdapter.clearDevices()
-        stopBleScanAndClearScanList()
-        Log.i(MAIN_LOG_TAG, "onDestroy END")
-    }
-
-    override fun onPause() {
-        super.onPause()
-        Log.i(MAIN_LOG_TAG, "onPause")
-        stopBleScanAndClearScanList()
-    }
-
-//    @RequiresApi(Build.VERSION_CODES.P)
-    override fun onResume() { //TODO : 앱 켜지면 자동으로 스캔해서 연결까지 동작
-        super.onResume()
-        Log.i(MAIN_LOG_TAG, "onResume START")
-        Toast.makeText(this, "onResume", Toast.LENGTH_SHORT).show()
-
-        if (!(toggleBtnAutoConnect.isChecked)){
-            return
-        }
-
-        // onDestroy 연결 유지 콜백 취소 처리
-//        handler.removeCallbacks(delayOnDestroyCallback)
-//        handler.removeCallbacksAndMessages("onDestroy")
-        // onResume 자동 연결 콜백
-        handler.postDelayed(delayOnResumeCallback, 1000)
-//        handler.postDelayed(delayOnResumeCallback,"onResume", 2000)
-    }
-
-    private fun startBleScan() {
-        try {
-            bleController.bleScanPopup(scanCallback, popupContainer)
-            btnScanStart.visibility = View.GONE
-            btnParingCheck.visibility = View.GONE
-            toggleBtnAutoConnect.visibility = View.GONE
-            popupView.visibility = View.VISIBLE
-            popupContainer.visibility = View.VISIBLE
-        } catch (e: Exception) {
-            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
-        }
-    }
-
-    private fun stopBleScanAndClearScanList() {
-        try {
-            bleController.stopBleScan(scanCallback)
-            Log.i(MAIN_LOG_TAG, "블루투스 스캔 정지 ")
-            btnScanStart.visibility = View.VISIBLE // Scan Start 버튼 활성화
-            btnParingCheck.visibility = View.VISIBLE
-            toggleBtnAutoConnect.visibility = View.VISIBLE
-            popupView.visibility = View.GONE // 팝업 숨김
-            popupContainer.visibility = View.GONE // 팝업 컨테이너 숨김
-            scanListAdapter.clearDevices()
-        } catch (e: Exception) {
-            Log.e(MAIN_LOG_TAG, "Failed to stop BLE scan: ${e.message}")
-        }
-    }
-
-    private val scanCallback = object : ScanCallback() {
-        override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val device = result.device
-            if (result.scanRecord?.deviceName == null){
-                // DeviceName 이 Null 인 경우, 스캔리스트에 추가 X
-                return
-            }else{
-                scanListAdapter.addDeviceToAdapt(device)
-            }
-        }
-
-        override fun onScanFailed(errorCode: Int) {
-            Log.e(MAIN_LOG_TAG, "onScanFailed called with errorCode: $errorCode")
-            when (errorCode) {
-                ScanCallback.SCAN_FAILED_ALREADY_STARTED -> Log.e(MAIN_LOG_TAG, "Scan already started")
-                ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
-                ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
-                ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
-            }
-            Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
-        }
-    }
-
 }

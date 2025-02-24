@@ -232,38 +232,49 @@ BluetoothLeScanner
         }
     }
 
-    fun getGattServer(macAddress: String): BluetoothGatt? {
+    suspend fun getGattServer(macAddress: String): BluetoothGatt? {
         try {
-            val device: BluetoothDevice = getBluetoothDevice(macAddress) ?: throw Exception("getBluetoothDevice 실패")
-            val gt: BluetoothGatt? = gtMap[macAddress]
+            if (gtMap[macAddress] === null) return null
 
             //TODO : 디버깅중 << 무조건 새로 GATT 연결하게끔 해서 테스트중
             // 기존 연결이 있고 정상적으로 연결된 상태인 경우
 //            if (gtServer?.getConnectionState(device) == BluetoothProfile.STATE_CONNECTED) {
-            if (bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED) {
-                if(gt != null){
-                    Log.i(logTagBleController,"GATT 기존 서버 사용 $gt")
-                    return gt
-                } else Log.w(logTagBleController,"GATT 서버 재접속 $gt")
+//            if (bluetoothManager.getConnectionState(device, BluetoothProfile.GATT) == BluetoothProfile.STATE_CONNECTED) {
+            if(gtMap[macAddress]!!.services.isEmpty()){
+                gtMap[macAddress]!!.discoverServices()
+                Log.w(logTagBleController,"GATT 서버 재접속중 ... $gtMap[macAddress]")
+                // 서비스 검색이 완료될 때까지 대기
+                var attempts = 0
+//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
+                while ((gtMap[macAddress]!!.services).isEmpty() && attempts < 20) {
+                    Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gtMap[macAddress]!!.services}")
+                    attempts++
+                    delay(100)  // 0.1초씩 최대 2초 대기
+                }
+                if((gtMap[macAddress]!!.services).isEmpty()) return null
+                return gtMap[macAddress]
+            }else{
+                Log.i(logTagBleController,"GATT 기존 서버 사용 $gtMap[macAddress]")
+                return gtMap[macAddress]
             }
 
-            // 연결이 없거나 끊어진 경우 새로 연결
-            device.let { bleDevice ->
-                val newGt: BluetoothGatt? = connectToDevice(bleDevice, { isConnected ->
-                    Log.i(logTagBleController, "isConnected : $isConnected")
-                    if (isConnected) {
-                        Log.i(logTagBleController, "${device.name} 기기 연결 성공")
-                    } else {
-                        Log.e(logTagBleController, "${device.name} 기기 연결 끊어짐")
-                    }
-                })
-
-                Log.d(logTagBleController,"gtMap $gtMap")
-                if (newGt != null) {
-                    gtMap[macAddress] = newGt
-                    return newGt
-                }else return null
-            }
+//            // 연결이 없거나 끊어진 경우 새로 연결
+//            device.let { bleDevice ->
+//                val newGt: BluetoothGatt? = connectToDevice(bleDevice, { isConnected ->
+//                    Log.i(logTagBleController, "isConnected : $isConnected")
+//                    if (isConnected) {
+//                        Log.i(logTagBleController, "${device.name} 기기 연결 성공")
+//                    } else {
+//                        Log.e(logTagBleController, "${device.name} 기기 연결 끊어짐")
+//                    }
+//                })
+//
+//                Log.d(logTagBleController,"gtMap $gtMap")
+//                if (newGt != null) {
+//                    gtMap[macAddress] = newGt
+//                    return newGt
+//                }else return null
+//            }
 
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
@@ -278,15 +289,6 @@ BluetoothLeScanner
         return try {
             val gt = getGattServer(macAddress) ?: return null
             Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
-
-            // 서비스 검색이 완료될 때까지 대기
-            var attempts = 0
-//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
-            while ((gt.services).isEmpty() && attempts < 20) {
-                Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
-                attempts++
-                delay(100)  // 0.1초씩 최대 2초 대기
-            }
 
             val service = gt.getService(serviceUuid)
 
@@ -306,15 +308,6 @@ BluetoothLeScanner
         return try {
             val gt = getGattServer(macAddress) ?: return null
             Log.d(logTagBleController,"디버깅중 < gt :${gt}, gt.services : ${gt.services}")
-
-            // 서비스 검색이 완료될 때까지 대기
-            var attempts = 0
-//            while (!isServiceDiscovered && attempts < 5) {  <- onServicesDiscovered 쪽에 플래그 사용
-            while ((gt.services).isEmpty() && attempts < 20) {
-                Log.d(logTagBleController,"디버깅중 < GATT 서버 연결 기다리는중 :${gt.services}")
-                attempts++
-                delay(100)  // 0.1초씩 최대 2초 대기
-            }
 
             val service = gt.getService(serviceUuid)
             Log.d(logTagBleController,"디버깅중 < service :${service} ${serviceUuid}")
@@ -600,6 +593,7 @@ BluetoothLeScanner
                         } else {
                             Log.e(logTagBleController, "데이터 전송 실패: $status")
                             Log.d(logTagBleController, "디버깅중 < writeData 실패로 인해 GATT 서비스 재검색")
+                            //TODO: 실패시 재시도 할지 정해야함
                             reDiscoverGattService(gatt)
                         }
                     }
@@ -665,6 +659,7 @@ BluetoothLeScanner
             val success = gt.readCharacteristic(readChar)
             Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${gtMap}")
             if (!success) {
+                //TODO: 실패시 재시도 할지 정해야함
                 Log.d(logTagBleController, "디버깅중 < requestReadData 실패로 인해 GATT 서비스 재검색")
                 reDiscoverGattService(gt)
             }
@@ -764,7 +759,7 @@ BluetoothLeScanner
     /**
      * 특정 기기 연결 해제
      */
-    fun disconnectDevice(macAddress: String) : Boolean {
+    suspend fun disconnectDevice(macAddress: String) : Boolean {
         hasBluetoothConnectPermission() ?: return false
         val gt = getGattServer(macAddress)
         gt ?: return false
@@ -783,7 +778,7 @@ BluetoothLeScanner
     /**
      * 모든 기기 연결 해제
      */
-    fun disconnectAllDevices() {
+    suspend fun disconnectAllDevices() {
         hasBluetoothConnectPermission() ?: return
         try {
             val connectedDevices = getConnectedDevices()
@@ -811,7 +806,7 @@ BluetoothLeScanner
     /**
      * 페어링된 기기 삭제
      */
-    fun removeParing(macAddress: String): Boolean {
+    suspend fun removeParing(macAddress: String): Boolean {
         hasBluetoothConnectPermission() ?: return false
 
         val gt = getGattServer(macAddress)

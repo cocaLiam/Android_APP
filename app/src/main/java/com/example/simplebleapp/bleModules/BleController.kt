@@ -86,7 +86,7 @@ class BleController(private val context: Context) {
     // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
     //    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
     // <application 단에서 다루는 Context Data ( 앱이 완전히 종료 되기 전까지 Data 를 보유함 )
-    private var gtMap: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
+    var gtMap: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
 
     /**
      * BLE 모듈 초기화
@@ -218,18 +218,6 @@ BluetoothLeScanner
             return
         }
         Log.i(logTagBleController, "GATT MAP 삭제 결과 : ${gtMap.keys().toList()}")
-    }
-
-    fun reDiscoverGattService(gt: BluetoothGatt){
-        try {
-            gt.discoverServices()
-        } catch (e: SecurityException) {
-            Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
-            return
-        } catch (e:Exception){
-            Log.e(logTagBleController, "reDiscoverGattService 함수 실패 : ${e.message}")
-            return
-        }
     }
 
     suspend fun getGattServer(macAddress: String): BluetoothGatt? {
@@ -406,9 +394,11 @@ BluetoothLeScanner
                                 // GAP 서버에 연결 성공
                                 Log.d(logTagBleController, "GAP 서버에 연결되었습니다.${newState}")
 
-                                Log.d(logTagBleController, "GATT 연결 시도중 ...${gatt}")
+                                Log.d(logTagBleController, "GATT 연결 시도중 ... gatt : ${gatt}")
                                 // GATT 전송 버퍼 크기 지정
                                 gatt.requestMtu(247)
+                                val result = gatt.discoverServices()
+                                Log.d(logTagBleController, "GATT 연결 시도중 ... result : ${result}")
                                 if (!gatt.discoverServices()) { // GATT 서비스 검색 실패
                                     throw Exception("GATT Service 검색 실패")
                                 }
@@ -594,7 +584,7 @@ BluetoothLeScanner
                             Log.e(logTagBleController, "데이터 전송 실패: $status")
                             Log.d(logTagBleController, "디버깅중 < writeData 실패로 인해 GATT 서비스 재검색")
                             //TODO: 실패시 재시도 할지 정해야함
-                            reDiscoverGattService(gatt)
+                            gatt.discoverServices()
                         }
                     }
                 }
@@ -661,7 +651,7 @@ BluetoothLeScanner
             if (!success) {
                 //TODO: 실패시 재시도 할지 정해야함
                 Log.d(logTagBleController, "디버깅중 < requestReadData 실패로 인해 GATT 서비스 재검색")
-                reDiscoverGattService(gt)
+                gt.discoverServices()
             }
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")

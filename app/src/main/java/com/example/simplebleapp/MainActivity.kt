@@ -63,6 +63,7 @@ class MainActivity : AppCompatActivity() {
     // View 변수 선언
     private lateinit var btnScanStart: Button
     private lateinit var btnParingCheck: Button
+    private lateinit var btnRemoveParing: Button
     private lateinit var btnDisconnect : Button
     private lateinit var toggleBtnAutoConnect : ToggleButton
     private lateinit var sharedPreferences: SharedPreferences
@@ -85,6 +86,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var onDestroyJobInfo: JobInfo
     private lateinit var onResumeJobInfo: JobInfo
 
+    @SuppressLint("MissingPermission")
     private fun appCreate(){
         setContentView(R.layout.activity_main)
 
@@ -119,6 +121,7 @@ class MainActivity : AppCompatActivity() {
         // activity_main.xml의 View 초기화
         btnScanStart = findViewById(R.id.btn_scan_start)
         btnParingCheck = findViewById(R.id.btn_paring_check)
+        btnRemoveParing  = findViewById(R.id.btn_removeParing)
         btnDisconnect  = findViewById(R.id.btn_disconnect)
         toggleBtnAutoConnect = findViewById(R.id.toggle_auto_connect)
         sharedPreferences = getSharedPreferences("ToggleStatusStorage", MODE_PRIVATE)
@@ -164,16 +167,30 @@ class MainActivity : AppCompatActivity() {
 
         // Paring check 버튼 클릭 리스너
         btnParingCheck.setOnClickListener {
-            val bondedDevices: Set<BluetoothDevice>? = bleController.getParingDevices()
+            val bondedDevices: Set<BluetoothDevice> = bleController.getParingDevices()
             Log.i(MAIN_LOG_TAG, "bondedDevices : $bondedDevices")
             Log.i(MAIN_LOG_TAG, "getConnectedDevices : ${bleController.getConnectedDevices()}")
-            if (bondedDevices == null){
-                bleController.updateReadData("")
+            if (bondedDevices.isNotEmpty()){
+                bleController.updateReadData("페어링된 기기 리스트 : ${bondedDevices} \n" +
+                        "현재 연결된 기기 리스트 : ${bleController.getConnectedDevices()}")
             }else{
                 bleController.updateReadData("페어링된 기기 리스트 : ${bondedDevices} \n" +
                         "현재 연결된 기기 리스트 : ${bleController.getConnectedDevices()}")
             }
         }
+
+        // RemoveParing 버튼 클릭 리스너
+        btnRemoveParing.setOnClickListener{
+            val paringSet = bleController.getParingDevices()
+            val target = paringSet.toList()[0]
+            coroutineScope.launch {
+                if(paringSet.isNotEmpty()){
+                    bleController.removeParing(target.address)
+                }
+            }
+            Toast.makeText(this, "ParingRemoved ${target.name}", Toast.LENGTH_SHORT).show()
+        }
+
 
         // Disconnect 버튼 클릭 리스너
         btnDisconnect.setOnClickListener{
@@ -472,6 +489,8 @@ class MainActivity : AppCompatActivity() {
                 ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
                 ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
                 ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
+                ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES -> Log.e(MAIN_LOG_TAG, "OUT_OF_HARDWARE_RESOURCES")
+                ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY -> Log.e(MAIN_LOG_TAG, "SCANNING_TOO_FREQUENTLY")
             }
             Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
         }
@@ -481,7 +500,7 @@ class MainActivity : AppCompatActivity() {
     private fun connectToDeviceWithPermissionCheck(selectedDevice: BluetoothDevice) {
         if(bleController.requestBlePermission(this)){
             // 블루투스 권한이 이미 있는 경우
-            bleController.connectToDevice(selectedDevice, { isConnected ->
+            val gtServer = bleController.connectToDevice(selectedDevice, { isConnected ->
                 if (isConnected) {
                     Log.i(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 성공")
 //                    for(tmp in bleController.getConnectedDevices()){
@@ -491,6 +510,7 @@ class MainActivity : AppCompatActivity() {
                     Log.w(MAIN_LOG_TAG, "${selectedDevice.name} 기기 연결 실패")
                 }
             })
+            if(gtServer !=null) bleController.gtMap[selectedDevice.address] = gtServer
         }
     }
 

@@ -78,6 +78,21 @@
         android:hint="수신 데이터 출력창"
         android:textSize="10sp"/>
 
+    <!-- removeParing 버튼 -->
+    <Button
+        android:id="@+id/btn_removeParing"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@id/et_output_data"
+        android:layout_alignParentEnd="true"
+        android:layout_marginTop="6dp"
+        android:layout_marginEnd="132dp"
+        android:background="@android:color/holo_red_light"
+        android:padding="5dp"
+        android:text="removeParing"
+        android:textColor="@android:color/white"
+        android:textSize="16sp" />
+
     <!-- Disconnect 버튼 -->
     <Button
         android:id="@+id/btn_disconnect"

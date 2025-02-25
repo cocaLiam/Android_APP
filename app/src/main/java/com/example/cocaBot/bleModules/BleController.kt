@@ -76,7 +76,7 @@ class BleController(private val context: Context) {
     // 스레드 안전한 맵 [ 자체적으로 Lock 기능 ( Auto 뮤텍스 기능 정도 ) ]
     //    private var bluetoothGattMap: ConcurrentHashMap<String, BleDeviceInfo> = ConcurrentHashMap()
     // <application 단에서 다루는 Context Data ( 앱이 완전히 종료 되기 전까지 Data 를 보유함 )
-    private var gtMap: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
+    var gtMap: ConcurrentHashMap<String, BluetoothGatt> = ConcurrentHashMap()
 
     /**
      * BLE 모듈 초기화
@@ -184,18 +184,6 @@ class BleController(private val context: Context) {
             return
         }
         Log.i(logTagBleController, "GATT MAP 삭제 결과 : ${gtMap.keys().toList()}")
-    }
-
-    fun reDiscoverGattService(gt: BluetoothGatt){
-        try {
-            gt.discoverServices()
-        } catch (e: SecurityException) {
-            Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")
-            return
-        } catch (e:Exception){
-            Log.e(logTagBleController, "reDiscoverGattService 함수 실패 : ${e.message}")
-            return
-        }
     }
 
     suspend fun getGattServer(macAddress: String): BluetoothGatt? {
@@ -511,7 +499,7 @@ class BleController(private val context: Context) {
                             Log.e(logTagBleController, "데이터 전송 실패: $status")
                             Log.d(logTagBleController, "디버깅중 < writeData 실패로 인해 GATT 서비스 재검색")
                             //TODO: 실패시 재시도 할지 정해야함
-                            reDiscoverGattService(gatt)
+                            gatt.discoverServices()
                         }
                     }
                 }
@@ -576,7 +564,7 @@ class BleController(private val context: Context) {
             Log.d(logTagBleController, "디버깅중 < 읽기 요청 결과: $success , GATT MAP : ${gtMap}")
             if (!success) {
                 Log.d(logTagBleController, "디버깅중 < requestReadData 실패로 인해 GATT 서비스 재검색")
-                reDiscoverGattService(gt)
+                gt.discoverServices()
             }
         } catch (e: SecurityException) {
             Log.e(logTagBleController, "SecurityException 에러 : ${e.message}")

@@ -483,7 +483,7 @@ OverView 에서 다시 앱 킬 시
 
         // 블루투스 권한 통과
         Log.i(MAIN_LOG_TAG, " targetDevice : ${targetDevice}")
-        bleController.connectToDevice(targetDevice, { isConnected ->
+        val gtServer = bleController.connectToDevice(targetDevice, { isConnected ->
             Log.i(MAIN_LOG_TAG,"isConnected : $isConnected")
             if (isConnected) {
                 if(isAutoConnection){
@@ -503,6 +503,7 @@ OverView 에서 다시 앱 킬 시
                 Log.w(MAIN_LOG_TAG, "${targetDevice.name} 기기 연결 끊어짐")
             }
         })
+        if(gtServer !=null) bleController.gtMap[targetDevice.address] = gtServer
 
     }
 
@@ -632,6 +633,8 @@ OverView 에서 다시 앱 킬 시
                 ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED -> Log.e(MAIN_LOG_TAG, "App registration failed")
                 ScanCallback.SCAN_FAILED_INTERNAL_ERROR -> Log.e(MAIN_LOG_TAG, "Internal error")
                 ScanCallback.SCAN_FAILED_FEATURE_UNSUPPORTED -> Log.e(MAIN_LOG_TAG, "Feature unsupported")
+                ScanCallback.SCAN_FAILED_OUT_OF_HARDWARE_RESOURCES -> Log.e(MAIN_LOG_TAG, "OUT_OF_HARDWARE_RESOURCES")
+                ScanCallback.SCAN_FAILED_SCANNING_TOO_FREQUENTLY -> Log.e(MAIN_LOG_TAG, "SCANNING_TOO_FREQUENTLY")
             }
             Toast.makeText(this@MainActivity, "Scan failed: $errorCode", Toast.LENGTH_SHORT).show()
         }

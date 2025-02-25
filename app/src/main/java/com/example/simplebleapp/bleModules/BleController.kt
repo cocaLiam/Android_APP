@@ -399,7 +399,7 @@ BluetoothLeScanner
                                 gatt.requestMtu(247)
                                 val result = gatt.discoverServices()
                                 Log.d(logTagBleController, "GATT 연결 시도중 ... result : ${result}")
-                                if (!gatt.discoverServices()) { // GATT 서비스 검색 실패
+                                if (!result) { // GATT 서비스 검색 실패
                                     throw Exception("GATT Service 검색 실패")
                                 }
 
